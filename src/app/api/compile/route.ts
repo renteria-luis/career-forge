@@ -1,0 +1,75 @@
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { resumeDocument } from '@/lib/resume/document'
+import { profile } from '@/lib/resume/profile'
+import { TypstCompileError, compileResume } from '@/lib/typst/compile'
+
+/**
+ * Compiles a profile and document into a PDF.
+ *
+ * Nothing is stored and nothing is logged. A request body here is somebody's
+ * name, phone number and employment history, so it exists for the length of the
+ * response and no longer.
+ *
+ * Compiling attacker-supplied documents on demand is a denial-of-service
+ * surface. There is a size ceiling below; before this is reachable without an
+ * account it also needs a rate limit.
+ */
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+const body = z.object({
+  profile,
+  document: resumeDocument,
+})
+
+/** Generous for a resume, small enough that nobody can post a novel. */
+const MAX_BODY_BYTES = 512 * 1024
+
+export async function POST(request: Request) {
+  const length = Number(request.headers.get('content-length') ?? 0)
+  if (length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'That document is too large to compile.' }, { status: 413 })
+  }
+
+  let payload: unknown
+  try {
+    payload = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Expected a JSON body.' }, { status: 400 })
+  }
+
+  const parsed = body.safeParse(payload)
+  if (!parsed.success) {
+    // Field paths are safe to return; the values that failed are not.
+    return NextResponse.json(
+      {
+        error: 'That document does not match the expected shape.',
+        fields: parsed.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      },
+      { status: 422 },
+    )
+  }
+
+  try {
+    const { pdf, pageCount, overflow } = compileResume(parsed.data.profile, parsed.data.document)
+    return new NextResponse(pdf as BodyInit, {
+      headers: {
+        'content-type': 'application/pdf',
+        'content-length': String(pdf.length),
+        'x-page-count': String(pageCount),
+        'x-overflow': String(overflow),
+        'cache-control': 'no-store',
+      },
+    })
+  } catch (error) {
+    if (error instanceof TypstCompileError) {
+      return NextResponse.json({ error: 'The template failed to compile.' }, { status: 500 })
+    }
+    throw error
+  }
+}

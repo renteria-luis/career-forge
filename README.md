@@ -37,8 +37,8 @@ docker build -t career-forge .
 docker run -p 3000:3000 career-forge
 ```
 
-The image's health check asks `/api/preview` for a PDF, so a healthy container
-means the compiler and fonts genuinely work.
+The health check compiles a real resume rather than pinging a status page, so
+a healthy container means the native compiler loaded and the fonts resolved.
 
 ## Fonts
 
