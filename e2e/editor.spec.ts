@@ -77,6 +77,30 @@ test.describe('layout controls', () => {
   })
 })
 
+test.describe('preview navigation', () => {
+  test('clicking a line in the preview opens the field it came from', async ({ page }) => {
+    // The preview is a picture of the document, so finding what to change means
+    // hunting through the form. Clicking the line itself is the shorter route.
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page.getByLabel('Role').first().fill('Senior ML Engineer')
+    await page.getByLabel('Employer').first().fill('Nomad Analytics')
+    await revealPreview(page)
+
+    const canvas = page.locator('canvas').first()
+    await expect(canvas).toBeVisible({ timeout: 15_000 })
+    const box = await canvas.boundingBox()
+    if (!box) throw new Error('The preview did not render.')
+
+    // The name sits at the top of the page, left-aligned.
+    await canvas.click({ position: { x: 60, y: box.height * 0.06 } })
+
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.getAttribute('name')))
+      .toBe('basics.name')
+  })
+})
+
 test.describe('import and export', () => {
   test('importing a PDF fills the form and reports what was read', async ({ page, request }) => {
     const pdf = Buffer.from(

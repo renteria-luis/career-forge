@@ -29,9 +29,30 @@ async function loadPdfjs() {
   return library
 }
 
-export function Preview({ compiled }: { compiled: CompiledPdf }) {
+/** A run of text and where it was drawn, in canvas pixels. */
+interface TextBox {
+  str: string
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+interface RenderedPage {
+  canvas: HTMLCanvasElement
+  boxes: TextBox[]
+}
+
+export function Preview({
+  compiled,
+  onSelectField,
+}: {
+  compiled: CompiledPdf
+  /** Called with the text under a click, so the editor can find its field. */
+  onSelectField?: (text: string) => void
+}) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [pages, setPages] = useState<HTMLCanvasElement[]>([])
+  const [pages, setPages] = useState<RenderedPage[]>([])
   const [width, setWidth] = useState(0)
 
   useEffect(() => {
@@ -56,7 +77,7 @@ export function Preview({ compiled }: { compiled: CompiledPdf }) {
       const document = await task.promise
       if (cancelled) return
 
-      const rendered: HTMLCanvasElement[] = []
+      const rendered: RenderedPage[] = []
       for (let number = 1; number <= document.numPages; number++) {
         const page = await document.getPage(number)
         const base = page.getViewport({ scale: 1 })
@@ -74,7 +95,23 @@ export function Preview({ compiled }: { compiled: CompiledPdf }) {
         if (!context) continue
         await page.render({ canvas, canvasContext: context, viewport }).promise
         if (cancelled) return
-        rendered.push(canvas)
+
+        // Kept alongside the pixels so a click can be answered with the words
+        // under it, which is what lets the editor jump to the matching field.
+        const content = await page.getTextContent()
+        const boxes: TextBox[] = []
+        for (const item of content.items) {
+          if (!('str' in item) || item.str.trim() === '') continue
+          const [x, y] = viewport.convertToViewportPoint(
+            item.transform[4] as number,
+            item.transform[5] as number,
+          )
+          const w = (item.width as number) * scale
+          const h = (item.height as number) * scale
+          boxes.push({ str: item.str, left: x, top: y - h, right: x + w, bottom: y })
+        }
+
+        rendered.push({ canvas, boxes })
       }
 
       // Swapped in one go, so the old pages stay visible until these are ready.
@@ -94,8 +131,14 @@ export function Preview({ compiled }: { compiled: CompiledPdf }) {
           {compiled.status === 'error' ? 'Nothing to show' : 'Compiling…'}
         </div>
       ) : (
-        pages.map((canvas, index) => (
-          <CanvasFrame key={index} canvas={canvas} page={index + 1} total={pages.length} />
+        pages.map((rendered, index) => (
+          <CanvasFrame
+            key={index}
+            page={rendered}
+            number={index + 1}
+            total={pages.length}
+            onSelectField={onSelectField}
+          />
         ))
       )}
     </div>
@@ -104,31 +147,56 @@ export function Preview({ compiled }: { compiled: CompiledPdf }) {
 
 /** Mounts an already-drawn canvas, so drawing never blocks the paint. */
 function CanvasFrame({
-  canvas,
   page,
+  number,
   total,
+  onSelectField,
 }: {
-  canvas: HTMLCanvasElement
-  page: number
+  page: RenderedPage
+  number: number
   total: number
+  onSelectField?: (text: string) => void
 }) {
   const holder = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const element = holder.current
     if (!element) return
-    element.replaceChildren(canvas)
-  }, [canvas])
+    element.replaceChildren(page.canvas)
+  }, [page])
+
+  function handleClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (!onSelectField) return
+    const rect = page.canvas.getBoundingClientRect()
+    if (rect.width === 0) return
+    // The canvas is drawn at device resolution and displayed at CSS width, so
+    // a click has to be scaled back into the coordinates the boxes are in.
+    const ratio = page.canvas.width / rect.width
+    const x = (event.clientX - rect.left) * ratio
+    const y = (event.clientY - rect.top) * ratio
+
+    const hit =
+      page.boxes.find((b) => x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) ??
+      // Nothing directly under the pointer, so take the nearest run on the same
+      // line. Clicking the empty half of a short line still selects that line.
+      page.boxes
+        .filter((b) => y >= b.top && y <= b.bottom)
+        .sort((a, b) => Math.abs(x - a.left) - Math.abs(x - b.left))[0]
+
+    if (hit) onSelectField(hit.str)
+  }
 
   return (
     <figure className="flex flex-col gap-1.5">
       <div
         ref={holder}
-        className="border-hairline rounded-edge overflow-hidden border bg-white shadow-sm"
+        onClick={handleClick}
+        className="border-hairline rounded-edge cursor-pointer overflow-hidden border bg-white shadow-sm"
+        title="Click a line to jump to it in the form"
       />
       {total > 1 && (
         <figcaption className="text-muted text-micro text-right font-mono">
-          {page} / {total}
+          {number} / {total}
         </figcaption>
       )}
     </figure>

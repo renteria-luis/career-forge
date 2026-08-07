@@ -38,6 +38,8 @@ function Highlights({
           label={label}
           hint={hint}
           rows={4}
+          name={field.name}
+          ref={field.ref}
           value={(field.value ?? []).join('\n')}
           onChange={(event) =>
             field.onChange(
@@ -157,6 +159,8 @@ export function ProfileForm({ form }: { form: Form }) {
                     label="Built with"
                     hint="Separated by commas."
                     placeholder="PyTorch, ONNX"
+                    name={field.name}
+                    ref={field.ref}
                     value={(field.value ?? []).join(', ')}
                     onChange={(event) =>
                       field.onChange(
@@ -247,6 +251,8 @@ export function ProfileForm({ form }: { form: Form }) {
                     label="Skills"
                     hint="Separated by commas. Only list what you could be asked about."
                     placeholder="PyTorch, scikit-learn"
+                    name={field.name}
+                    ref={field.ref}
                     value={(field.value ?? []).join(', ')}
                     onChange={(event) =>
                       field.onChange(
