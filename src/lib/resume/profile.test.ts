@@ -49,3 +49,30 @@ describe('profile', () => {
     expect(profile.safeParse({ basics: { email: 'ana@' } }).success).toBe(false)
   })
 })
+
+describe('blank input', () => {
+  it('treats an empty field as absent rather than invalid', () => {
+    // Every HTML input hands back "" when untouched. Without this, a form that
+    // has only been half filled in fails validation on every empty field.
+    const parsed = profile.parse({
+      basics: { name: 'Ana', email: '', url: '', phone: '' },
+      work: [{ name: 'Acme', startDate: '', endDate: '' }],
+    })
+    expect(parsed.basics).toEqual({ name: 'Ana' })
+    expect(parsed.work?.[0]).toEqual({ name: 'Acme' })
+  })
+
+  it('still rejects a value that is present and wrong', () => {
+    expect(profile.safeParse({ basics: { email: 'nope' } }).success).toBe(false)
+    expect(profile.safeParse({ work: [{ startDate: 'last year' }] }).success).toBe(false)
+  })
+
+  it('trims whitespace that would otherwise reach the PDF', () => {
+    const parsed = profile.parse({ basics: { name: '  Ana Ruiz  ' } })
+    expect(parsed.basics?.name).toBe('Ana Ruiz')
+  })
+
+  it('treats a whitespace-only field as absent', () => {
+    expect(profile.parse({ basics: { name: '   ' } }).basics).toEqual({})
+  })
+})
