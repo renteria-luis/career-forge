@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 
 test.describe('/api/health', () => {
