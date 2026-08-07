@@ -48,6 +48,16 @@ const URL = new RegExp(
 const PHONE = /(?:\+?\d[\d\s().-]{7,}\d)/
 const BULLET = /^[•\-*‣▪·—–]\s*/
 
+/** Past this, a colon is punctuation in a sentence rather than a field label. */
+const LABEL_MAX_CHARS = 40
+
+function splitKeywords(text: string): string[] {
+  return text
+    .split(/[,;·|]/)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean)
+}
+
 /**
  * How much further right a line must sit to count as a wrapped continuation
  * rather than a new line of its own. Hanging indents are several points; this
@@ -198,25 +208,47 @@ interface KeywordItem {
 
 /** Sections that are really a list, not a set of dated entries. */
 function toKeywordList(lines: TextLine[]): KeywordItem[] {
-  return lines.flatMap<KeywordItem>((line) => {
+  const items: KeywordItem[] = []
+  /** True when the last item came from a "Label: a, b, c" line. */
+  let labelled = false
+
+  for (const line of lines) {
     const text = flatten(line.text.replace(BULLET, ''))
-    if (text === '') return []
+    if (text === '') continue
+
     const colon = text.indexOf(':')
-    if (colon > 0 && colon < 40) {
-      const keywords = text
-        .slice(colon + 1)
-        .split(/[,;·|]/)
-        .map((k) => k.trim())
-        .filter(Boolean)
-      return [{ name: text.slice(0, colon).trim(), keywords }]
+    const hasLabel = colon > 0 && colon < LABEL_MAX_CHARS
+
+    /**
+     * A skills line that runs past the width of the page wraps with no marker
+     * and no indent, so position says nothing about it. What does say something
+     * is weight: the label that opens the line is bold and the wrap is not.
+     *
+     * Without this the tail of a long skill group becomes a group of its own
+     * with an empty name, which is exactly how it looked in the form.
+     */
+    if (!hasLabel && !line.bold && labelled && items.length > 0) {
+      const last = items[items.length - 1]
+      last.keywords = [...(last.keywords ?? []), ...splitKeywords(text)]
+      continue
     }
+
+    if (hasLabel) {
+      items.push({
+        name: text.slice(0, colon).trim(),
+        keywords: splitKeywords(text.slice(colon + 1)),
+      })
+      labelled = true
+      continue
+    }
+
     // No label, so the whole line is a list of skills.
-    const keywords = text
-      .split(/[,;·|]/)
-      .map((k) => k.trim())
-      .filter(Boolean)
-    return keywords.length > 1 ? [{ keywords }] : [{ name: text }]
-  })
+    const keywords = splitKeywords(text)
+    items.push(keywords.length > 1 ? { keywords } : { name: text })
+    labelled = false
+  }
+
+  return items
 }
 
 function parseHeader(lines: TextLine[]): {
