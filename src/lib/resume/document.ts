@@ -57,7 +57,7 @@ export const documentSection = z.object({
 })
 
 export const typography = z.object({
-  font: z.enum(FONT_IDS).default('source-sans'),
+  font: z.enum(FONT_IDS).default('carlito'),
   /** Points. The template derives heading sizes and leading from this. */
   size: z.number().min(FONT_SIZE_MIN).max(FONT_SIZE_MAX).default(FONT_SIZE_DEFAULT),
   /** Page margin in CSS pixels; 1px is exactly 0.75pt. */
@@ -74,11 +74,18 @@ export const documentOptions = z.object({
   maxPages: z.number().int().min(1).max(10).default(1),
   /** Shown under the name. Empty means the user chose not to have one. */
   headline: z.string().optional(),
-  /** Contact details are per-document: not every application should get a phone number. */
+  /**
+   * Contact details are per-document: not every application should get a phone
+   * number, and a design role has no use for a GitHub profile. Each one is its
+   * own switch rather than a single "links" switch, because the reason to drop
+   * one is never the reason to drop the others.
+   */
   showEmail: z.boolean().default(true),
   showPhone: z.boolean().default(true),
   showLocation: z.boolean().default(true),
-  showUrl: z.boolean().default(true),
+  showWebsite: z.boolean().default(true),
+  showGithub: z.boolean().default(true),
+  showLinkedin: z.boolean().default(true),
 })
 
 export const resumeDocument = z.object({

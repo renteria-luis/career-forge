@@ -85,7 +85,7 @@ describe('buildRenderModel', () => {
 
   it('resolves the font id to the family name Typst looks up', () => {
     const model = buildRenderModel(sampleProfile, sampleDocument)
-    expect(model.page.font).toBe('Source Sans 3')
+    expect(model.page.font).toBe('Carlito')
   })
 
   it('keeps an entry whose employer is missing', () => {

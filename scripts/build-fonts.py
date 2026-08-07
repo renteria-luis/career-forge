@@ -51,12 +51,36 @@ FAMILIES = {
         "italic": "EBGaramond-Italic[wght].ttf",
         "axes": {},
     },
-    "inter": {
-        "dir": "inter",
-        "family": "Inter",
-        "upright": "Inter[opsz,wght].ttf",
-        "italic": "Inter-Italic[opsz,wght].ttf",
-        "axes": {"opsz": 14},
+    # Metric-compatible with Arial and Helvetica: identical advance widths, so
+    # a document set in it occupies the same space as the original.
+    "arimo": {
+        "dir": "arimo",
+        "family": "Arimo",
+        "upright": "Arimo[wght].ttf",
+        "italic": "Arimo-Italic[wght].ttf",
+        "axes": {},
+    },
+    # Metric-compatible with Calibri.
+    "carlito": {
+        "dir": "carlito",
+        "family": "Carlito",
+        "static": {
+            "Regular": "Carlito-Regular.ttf",
+            "Bold": "Carlito-Bold.ttf",
+            "Italic": "Carlito-Italic.ttf",
+            "BoldItalic": "Carlito-BoldItalic.ttf",
+        },
+    },
+    # Metric-compatible with Cambria.
+    "caladea": {
+        "dir": "caladea",
+        "family": "Caladea",
+        "static": {
+            "Regular": "Caladea-Regular.ttf",
+            "Bold": "Caladea-Bold.ttf",
+            "Italic": "Caladea-Italic.ttf",
+            "BoldItalic": "Caladea-BoldItalic.ttf",
+        },
     },
     # Lato predates variable fonts upstream and already ships as statics.
     "lato": {

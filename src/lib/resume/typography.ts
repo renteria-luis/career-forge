@@ -6,29 +6,46 @@
  * sides read this list, so adding a font is a single edit and a missing file is
  * a startup failure rather than a broken PDF.
  *
- * Every face here is OFL-licensed, which is what makes embedding it in a PDF we
+ * Every face here is free-licensed, which is what makes embedding it in a PDF we
  * hand to a user legal. Do not add a font without checking that.
+ *
+ * Calibri, Arial, Cambria and Helvetica cannot be shipped — they are licensed
+ * per machine, and putting one in a downloadable document is redistribution.
+ * The faces below are their metric-compatible equivalents: every glyph has the
+ * same advance width as the original, so line breaks, page count and the space
+ * a document occupies are identical. The label names what a reader would call
+ * it; `family` is what is actually embedded.
  */
 export const FONTS = {
-  'source-serif': {
-    label: 'Source Serif',
-    family: 'Source Serif 4',
-    note: 'Serif. Reads as considered without reading as old-fashioned.',
+  carlito: {
+    label: 'Calibri',
+    family: 'Carlito',
+    note: 'What most resumes are already set in. Rounded, quiet, easy at 10pt.',
+  },
+  arimo: {
+    label: 'Arial',
+    family: 'Arimo',
+    note: 'The neutral default. Also what Helvetica looks like on paper.',
+  },
+  caladea: {
+    label: 'Cambria',
+    family: 'Caladea',
+    note: 'Serif. Sturdy and made for screens as much as print.',
   },
   'eb-garamond': {
-    label: 'EB Garamond',
+    label: 'Garamond',
     family: 'EB Garamond',
     note: 'Serif. Warmer and more literary; sets short at a given size.',
   },
   'source-sans': {
     label: 'Source Sans',
     family: 'Source Sans 3',
-    note: 'Sans. The safe default — clean at small sizes, parses cleanly.',
+    note: 'Sans. Clean at small sizes and parses cleanly.',
   },
-  inter: {
-    label: 'Inter',
-    family: 'Inter',
-    note: 'Sans. Neutral and modern; slightly wider than Source Sans.',
+  'source-serif': {
+    label: 'Source Serif',
+    family: 'Source Serif 4',
+    note: 'Serif. Reads as considered without reading as old-fashioned.',
   },
   lato: {
     label: 'Lato',
