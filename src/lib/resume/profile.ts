@@ -50,7 +50,22 @@ const blank = z
 /** Free text. */
 const text = () => blank.optional()
 const email = () => blank.pipe(z.email().optional()).optional()
-const url = () => blank.pipe(z.url().optional()).optional()
+/**
+ * Accepts what people actually type. Nobody writes "https://" on a resume, so
+ * "jamessmith.dev" and "www.example.com" are normalised to a real URL rather
+ * than rejected — a stored link needs a scheme to be clickable, but demanding
+ * one from the user is a validation error over a formality.
+ *
+ * The scheme is stripped again for display; see the render model.
+ */
+const url = () =>
+  blank
+    .transform((value) => {
+      if (!value) return value
+      return /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`
+    })
+    .pipe(z.url().optional())
+    .optional()
 const date = () => blank.pipe(partialDate.optional()).optional()
 
 export const location = z.object({
