@@ -122,6 +122,7 @@ finished drawing.
 `output: 'standalone'` traces the server and its real dependencies, including
 the native binding, the fonts and the templates. The container starts that.
 
-The container's health check asks for a PDF rather than a status page, because
-a running process proves nothing about whether the native compiler loaded or the
-fonts resolved — the two things most likely to break in a new environment.
+The container's health check compiles a real resume rather than pinging a status
+page, because a running process proves nothing about whether the native compiler
+loaded or the fonts resolved — the two things most likely to break in a new
+environment.
