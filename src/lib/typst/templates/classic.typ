@@ -39,9 +39,13 @@
 /** Between one entry and the next within a section. */
 #let gap-entry = 1em * d
 /** Between a section heading and the first line under it. */
-#let gap-heading = 0.45em * d
-/** Between the heading's words and the rule under them. */
-#let gap-rule = 0.28em * d
+#let gap-heading = 0.62em * d
+/**
+ * Between the heading's words and the rule under them. Deliberately tight: the
+ * rule belongs to the heading, and set closer to the content than to its own
+ * title it reads as a divider floating loose above the text.
+ */
+#let gap-rule = 0.1em * d
 /** Between the last line of a section and the next section's heading. */
 #let gap-section = 1.5em * d
 
@@ -77,22 +81,36 @@
 // with a negative offset, which was landing it on the descenders of the words.
 #let section-heading(title) = {
   block(above: gap-section, below: 0pt, breakable: false)[
+    // Paragraph spacing would otherwise be added between the title, the rule
+    // and the gap below it, on top of the values set here.
+    #set par(spacing: 0pt)
     #text(size: 0.95em, weight: 700, tracking: 0.06em, upper(title))
     #v(gap-rule, weak: false)
     #line(length: 100%, stroke: 0.5pt + luma(160))
+    #v(gap-heading, weak: false)
   ]
 }
 
 #let entry(item, first) = {
-  block(above: if first { gap-heading } else { gap-entry }, below: 0pt, breakable: false)[
+  block(above: if first { 0pt } else { gap-entry }, below: 0pt, breakable: false)[
     #if "title" in item or "meta" in item [
       #text(weight: 700, item.at("title", default: ""))
       #h(1fr)
-      #text(size: 0.92em, item.at("meta", default: ""))
+      #text(size: 0.92em, weight: 700, item.at("meta", default: ""))
     ]
     #if "subtitle" in item [
       #linebreak()
       #text(style: "italic", item.subtitle)
+    ]
+    // The stack a project was built with belongs with its name, not trailing
+    // after the bullets where it reads as an afterthought.
+    #if "keywords" in item [
+      #linebreak()
+      #text(style: "italic", size: 0.94em, item.keywords.join(", "))
+    ]
+    #if "url" in item and item.url != none [
+      #linebreak()
+      #text(size: 0.92em, link(item.url))
     ]
   ]
   if "summary" in item {
@@ -101,9 +119,6 @@
   if "highlights" in item {
     block(above: gap-paragraph, below: 0pt, list(..item.highlights))
   }
-  if "keywords" in item {
-    block(above: gap-paragraph, below: 0pt, text(size: 0.94em, item.keywords.join(", ")))
-  }
 }
 
 #let inline-entry(item, first) = {
@@ -111,28 +126,34 @@
     text(weight: 700, if "keywords" in item { item.title + ": " } else { item.title })
   }
   let body = if "keywords" in item { item.keywords.join(", ") }
-  block(above: if first { gap-heading } else { gap-paragraph }, below: 0pt)[#label#body]
+  block(above: if first { 0pt } else { gap-paragraph }, below: 0pt)[#label#body]
 }
 
 // --- header -----------------------------------------------------------------
-#block(below: 0pt)[#text(size: 1.95em, weight: 700, data.name)]
-
-#if "headline" in data and data.headline != none [
-  #block(above: gap-paragraph, below: 0pt)[#text(size: 1.02em, data.headline)]
-]
-
 // Each contact detail prints its label and links to its href when it has one,
 // so "jamessmith.dev" is what appears and the full address is what opens.
-#let contact-item(item) = {
-  if "href" in item and item.href != none { link(item.href, item.label) } else { item.label }
-}
+//
+// Every item is boxed. A box will not break across lines, so a long address
+// moves to the next line whole instead of being split down the middle — which
+// is both unreadable and impossible to retype.
+#let contact-item(item) = box(
+  if "href" in item and item.href != none { link(item.href, item.label) } else { item.label },
+)
 
-#if data.contacts.len() > 0 [
-  #block(above: gap-paragraph, below: 0pt)[
-    #text(
-      size: 0.92em,
-      data.contacts.map(contact-item).join(text(fill: luma(120))[ #h(0.25em) | #h(0.25em) ]),
-    )
+#align(center)[
+  #block(below: 0pt)[#text(size: 1.95em, weight: 700, data.name)]
+
+  #if "headline" in data and data.headline != none [
+    #block(above: gap-paragraph, below: 0pt)[#text(size: 1.02em, data.headline)]
+  ]
+
+  #if data.contacts.len() > 0 [
+    #block(above: gap-paragraph, below: 0pt)[
+      #text(
+        size: 0.92em,
+        data.contacts.map(contact-item).join([#h(0.3em)#text(fill: luma(140))[|]#h(0.3em)]),
+      )
+    ]
   ]
 ]
 

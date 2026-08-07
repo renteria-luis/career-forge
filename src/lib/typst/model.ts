@@ -140,7 +140,10 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         title: [e.studyType, e.area].filter(Boolean).join(', ') || undefined,
         subtitle: e.institution,
         meta: formatRange(e.startDate, e.endDate),
-        summary: e.score ? `Score: ${e.score}` : undefined,
+        summary: e.score || undefined,
+        // GPA, honours and coursework are optional and belong under the entry
+        // the way a job's achievements do.
+        highlights: e.courses?.length ? e.courses : undefined,
         url: e.url,
       }))
     case 'projects':
@@ -286,12 +289,20 @@ function buildContacts(profile: Profile, doc: ResumeDocument): Contact[] {
     const place = [b?.location?.city, b?.location?.countryCode].filter(Boolean).join(', ')
     if (place) contacts.push({ label: place })
   }
-  if (options.showUrl) {
-    if (b?.url) contacts.push({ label: readableUrl(b.url), href: b.url })
-    // A bare username is meaningless on paper; show the address someone can type.
-    for (const p of b?.profiles ?? []) {
-      if (p.url) contacts.push({ label: readableUrl(p.url), href: p.url })
-    }
+  if (options.showWebsite && b?.url) {
+    contacts.push({ label: readableUrl(b.url), href: b.url })
+  }
+  // A bare username is meaningless on paper; show the address someone can type.
+  for (const profile of b?.profiles ?? []) {
+    if (!profile.url) continue
+    const network = profile.network?.toLowerCase() ?? ''
+    const shown =
+      network === 'github'
+        ? options.showGithub
+        : network === 'linkedin'
+          ? options.showLinkedin
+          : options.showWebsite
+    if (shown) contacts.push({ label: readableUrl(profile.url), href: profile.url })
   }
 
   return contacts.filter((c) => c.label.trim() !== '')
