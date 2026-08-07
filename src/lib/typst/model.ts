@@ -189,6 +189,25 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
   }
 }
 
+/**
+ * True when an entry would print nothing.
+ *
+ * The editor opens with a blank role and a blank qualification so there is
+ * somewhere to start typing. Those must not reach the page — an entry with no
+ * fields still counts as an entry, which is enough to print a section heading
+ * with nothing underneath it.
+ */
+function hasContent(entry: RenderEntry): boolean {
+  return Boolean(
+    entry.title ||
+    entry.subtitle ||
+    entry.meta ||
+    entry.summary ||
+    entry.highlights?.length ||
+    entry.keywords?.length,
+  )
+}
+
 function buildSection(section: DocumentSection, profile: Profile): RenderSection | null {
   if (!section.visible) return null
 
@@ -196,22 +215,20 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
     const custom = profile.extensions?.customSections?.find((c) => c.id === section.id)
     if (!custom) return null
     // Absent entryIds means every entry; an empty array means none.
-    const entries = section.entryIds
-      ? custom.entries.filter((e) => section.entryIds?.includes(e.id))
-      : custom.entries
-    if (entries.length === 0) return null
-    return {
-      title: section.title ?? custom.title,
-      layout: 'entries',
-      entries: entries.map((e) => ({
+    const all = custom.entries ?? []
+    const selected = section.entryIds ? all.filter((e) => section.entryIds?.includes(e.id)) : all
+    const entries = selected
+      .map((e) => ({
         title: e.title,
         subtitle: e.subtitle,
         meta: formatRange(e.startDate, e.endDate),
         summary: e.summary,
         highlights: e.highlights,
         url: e.url,
-      })),
-    }
+      }))
+      .filter(hasContent)
+    if (entries.length === 0) return null
+    return { title: section.title ?? custom.title, layout: 'entries', entries }
   }
 
   const id = section.id as StandardSectionId
@@ -227,9 +244,9 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
   const all = buildStandard(id, profile)
   // Standard entries have no stable ids yet, so index position is the handle
   // tailoring uses. Revisit when entries gain ids of their own.
-  const entries = section.entryIds
-    ? all.filter((_, i) => section.entryIds?.includes(String(i)))
-    : all
+  const entries = (
+    section.entryIds ? all.filter((_, i) => section.entryIds?.includes(String(i))) : all
+  ).filter(hasContent)
   if (entries.length === 0) return null
   return { title, layout, entries }
 }

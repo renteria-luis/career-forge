@@ -100,3 +100,31 @@ describe('buildRenderModel', () => {
     expect(entries[2]?.title).toBe('Research Assistant')
   })
 })
+
+describe('empty entries', () => {
+  it('drops an entry that would print nothing', () => {
+    // The editor opens with a blank role so there is somewhere to type. It must
+    // not produce an Experience heading with nothing under it.
+    const model = buildRenderModel(
+      { basics: { name: 'Ana' }, work: [{}] },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'work', visible: true }] },
+    )
+    expect(model.sections).toHaveLength(0)
+  })
+
+  it('keeps an entry that has only a date', () => {
+    const model = buildRenderModel(
+      { basics: { name: 'Ana' }, work: [{ startDate: '2021' }] },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'work', visible: true }] },
+    )
+    expect(model.sections[0]?.entries).toHaveLength(1)
+  })
+
+  it('keeps the entries that have content and drops the ones that do not', () => {
+    const model = buildRenderModel(
+      { basics: { name: 'Ana' }, work: [{ position: 'Engineer' }, {}, { name: 'Acme' }] },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'work', visible: true }] },
+    )
+    expect(model.sections[0]?.entries).toHaveLength(2)
+  })
+})
