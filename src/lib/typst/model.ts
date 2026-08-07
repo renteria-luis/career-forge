@@ -25,7 +25,10 @@ export interface RenderEntry {
   highlights?: string[]
   /** Comma-joined by the template; used by inline sections. */
   keywords?: string[]
+  /** Where the link goes. */
   url?: string
+  /** What the link reads as — the same address without the scheme. */
+  urlLabel?: string
 }
 
 export interface RenderSection {
@@ -60,6 +63,14 @@ export interface RenderModel {
     margin: number
     density: number
   }
+}
+
+/** "https://www.github.com/x" prints as "github.com/x". */
+function readableUrl(url: string): string {
+  return url
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/$/, '')
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -239,6 +250,7 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
         summary: e.summary,
         highlights: e.highlights,
         url: e.url,
+        urlLabel: e.url ? readableUrl(e.url) : undefined,
       }))
       .filter(hasContent)
     if (entries.length === 0) return null
@@ -263,14 +275,6 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
   ).filter(hasContent)
   if (entries.length === 0) return null
   return { title, layout, entries }
-}
-
-/** "https://www.github.com/x" prints as "github.com/x". */
-function readableUrl(url: string): string {
-  return url
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/$/, '')
 }
 
 function buildContacts(profile: Profile, doc: ResumeDocument): Contact[] {

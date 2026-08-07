@@ -41,11 +41,17 @@
 /** Between a section heading and the first line under it. */
 #let gap-heading = 0.62em * d
 /**
- * Between the heading's words and the rule under them. Deliberately tight: the
- * rule belongs to the heading, and set closer to the content than to its own
- * title it reads as a divider floating loose above the text.
+ * Between the heading's words and the rule under them. Closer to the heading
+ * than to the content, so the rule reads as belonging to its own title rather
+ * than floating loose above the text — but not touching the descenders.
  */
-#let gap-rule = 0.1em * d
+#let gap-rule = 0.26em * d
+
+/**
+ * Section headings run one point above the body. Set at or below body size a
+ * heading stops announcing itself, and much larger it competes with the name.
+ */
+#let heading-size = (page-opts.size + 1) * 1pt
 /** Between the last line of a section and the next section's heading. */
 #let gap-section = 1.5em * d
 
@@ -84,7 +90,7 @@
     // Paragraph spacing would otherwise be added between the title, the rule
     // and the gap below it, on top of the values set here.
     #set par(spacing: 0pt)
-    #text(size: 0.95em, weight: 700, tracking: 0.06em, upper(title))
+    #text(size: heading-size, weight: 700, tracking: 0.06em, upper(title))
     #v(gap-rule, weak: false)
     #line(length: 100%, stroke: 0.5pt + luma(160))
     #v(gap-heading, weak: false)
@@ -110,7 +116,7 @@
     ]
     #if "url" in item and item.url != none [
       #linebreak()
-      #text(size: 0.92em, link(item.url))
+      #text(size: 0.92em, link(item.url, item.at("urlLabel", default: item.url)))
     ]
   ]
   if "summary" in item {
