@@ -19,6 +19,26 @@ import { OptionalField } from './optional-field'
 
 type Form = UseFormReturn<Profile>
 
+/** Titles of the blocks the form will render, in the order it renders them. */
+export function formBlockTitles(sections: DocumentSection[]): string[] {
+  const shown = new Set(sections.filter((section) => section.visible).map((section) => section.id))
+  return [
+    'You',
+    ...(
+      [
+        ['work', 'Experience'],
+        ['projects', 'Projects'],
+        ['education', 'Education'],
+        ['skills', 'Skills'],
+        ['languages', 'Languages'],
+        ['certificates', 'Certifications'],
+      ] as const
+    )
+      .filter(([id]) => shown.has(id))
+      .map(([, title]) => title),
+  ]
+}
+
 /**
  * Bullets are edited as one per line in a textarea rather than as nested field
  * arrays. Typing, reordering and deleting bullets is what people spend their

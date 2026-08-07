@@ -13,7 +13,8 @@ import { DocumentControls } from './document-controls'
 import { Button } from './fields'
 import { ImportReport } from './import-report'
 import { Preview } from './preview'
-import { ProfileForm } from './profile-form'
+import { ProfileForm, formBlockTitles } from './profile-form'
+import { SectionIndex } from './section-index'
 
 type Pane = 'content' | 'layout'
 
@@ -178,38 +179,41 @@ export function Editor() {
           className={`min-h-0 flex-1 overflow-y-auto ${showPreview ? 'hidden lg:block' : ''}`}
           aria-label="Resume content"
         >
-          <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
-            <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
-              {(['content', 'layout'] as const).map((id) => (
-                <button
-                  key={id}
-                  role="tab"
-                  type="button"
-                  aria-selected={pane === id}
-                  onClick={() => setPane(id)}
-                  className={`text-small -mb-px border-b-2 px-3 py-2 font-medium capitalize transition-colors ${
-                    pane === id
-                      ? 'border-accent text-accent'
-                      : 'text-muted hover:text-strong border-transparent'
-                  }`}
-                >
-                  {id}
-                </button>
-              ))}
+          <div className="mx-auto flex w-full max-w-3xl gap-5 px-4 py-6 sm:px-6">
+            <div className="min-w-0 flex-1">
+              <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
+                {(['content', 'layout'] as const).map((id) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    type="button"
+                    aria-selected={pane === id}
+                    onClick={() => setPane(id)}
+                    className={`text-small -mb-px border-b-2 px-3 py-2 font-medium capitalize transition-colors ${
+                      pane === id
+                        ? 'border-accent text-accent'
+                        : 'text-muted hover:text-strong border-transparent'
+                    }`}
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+
+              {importError && (
+                <p className="border-flag/40 bg-flag-sunk text-flag rounded-edge text-small mb-4 border px-3 py-2">
+                  {importError}
+                </p>
+              )}
+              {report && <ImportReport report={report} onDismiss={() => setReport(null)} />}
+
+              {pane === 'content' ? (
+                <ProfileForm form={form} sections={document.sections} />
+              ) : (
+                <DocumentControls document={document} onChange={setDocument} />
+              )}
             </div>
-
-            {importError && (
-              <p className="border-flag/40 bg-flag-sunk text-flag rounded-edge text-small mb-4 border px-3 py-2">
-                {importError}
-              </p>
-            )}
-            {report && <ImportReport report={report} onDismiss={() => setReport(null)} />}
-
-            {pane === 'content' ? (
-              <ProfileForm form={form} sections={document.sections} />
-            ) : (
-              <DocumentControls document={document} onChange={setDocument} />
-            )}
+            {pane === 'content' && <SectionIndex titles={formBlockTitles(document.sections)} />}
           </div>
         </section>
 
