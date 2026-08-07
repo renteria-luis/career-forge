@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+
+jobs:
+  verify:
+    name: Types, lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      # Unit tests cover the schema, the render model and PDF compilation,
+      # including that every font in the registry has a real file behind it.
+      - run: pnpm test
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Only Chromium: the suite guards our own layout, not browser differences.
+      # Add browsers when there is a bug that needs one.
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: career-forge:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Building is not enough. Start it and ask for a PDF: that is the only
+      # check that proves the native compiler and the fonts survived the build.
+      - name: Serve a PDF from the image
+        run: |
+          docker run -d --name cf -p 3000:3000 career-forge:ci
+          for i in $(seq 1 30); do
+            if curl -fsS -o /tmp/out.pdf http://localhost:3000/api/preview; then break; fi
+            sleep 2
+          done
+          docker logs cf
+          head -c 5 /tmp/out.pdf | grep -q '%PDF-' || { echo "not a PDF"; exit 1; }
+          echo "served $(stat -c%s /tmp/out.pdf) bytes"
