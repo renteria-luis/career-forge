@@ -1,4 +1,5 @@
 import type { Profile } from '@/lib/resume/profile'
+import { formatDate, formatRange } from '@/lib/typst/model'
 
 /**
  * Finds the form field a line of the rendered PDF came from.
@@ -38,9 +39,22 @@ export function buildFieldIndex(profile: Profile): FieldEntry[] {
   add('basics.url', profile.basics?.url)
   add('basics.location.city', profile.basics?.location?.city)
 
+  /**
+   * Dates print formatted ("Aug 2023 - Feb 2024") and are stored raw
+   * ("2023-08"), so the printed form has to be indexed or clicking a date finds
+   * nothing. The range is a single run in the PDF and cannot be split by which
+   * half was clicked, so it opens the start date; the end date sits beside it.
+   */
+  const addDates = (path: string, start?: string, end?: string) => {
+    add(`${path}.startDate`, formatRange(start, end))
+    add(`${path}.startDate`, formatDate(start))
+    add(`${path}.endDate`, formatDate(end))
+  }
+
   profile.work?.forEach((work, index) => {
     add(`work.${index}.position`, work.position)
     add(`work.${index}.name`, work.name)
+    addDates(`work.${index}`, work.startDate, work.endDate)
     // Bullets share one textarea, so every bullet points at the same field.
     work.highlights?.forEach((highlight) => add(`work.${index}.highlights`, highlight))
   })
@@ -49,6 +63,8 @@ export function buildFieldIndex(profile: Profile): FieldEntry[] {
     add(`projects.${index}.name`, project.name)
     add(`projects.${index}.description`, project.description)
     add(`projects.${index}.keywords`, project.keywords?.join(', '))
+    add(`projects.${index}.url`, project.url)
+    addDates(`projects.${index}`, project.startDate, project.endDate)
     project.highlights?.forEach((highlight) => add(`projects.${index}.highlights`, highlight))
   })
 
@@ -56,6 +72,8 @@ export function buildFieldIndex(profile: Profile): FieldEntry[] {
     add(`education.${index}.institution`, education.institution)
     add(`education.${index}.area`, education.area)
     add(`education.${index}.studyType`, education.studyType)
+    addDates(`education.${index}`, education.startDate, education.endDate)
+    education.courses?.forEach((course) => add(`education.${index}.courses`, course))
   })
 
   profile.skills?.forEach((skill, index) => {
@@ -84,11 +102,32 @@ export function findField(index: FieldEntry[], clicked: string): string | undefi
   const exact = index.find((entry) => entry.text === needle)
   if (exact) return exact.path
 
-  let best: FieldEntry | undefined
-  for (const entry of index) {
-    const matches = entry.text.includes(needle) || needle.includes(entry.text)
-    if (!matches) continue
-    if (!best || entry.text.length < best.text.length) best = entry
+  // Then the normal case: a click lands on one line of a longer field, so the
+  // field contains what was clicked. Shortest wins, being the most specific.
+  const containing = index.filter((entry) => entry.text.includes(needle))
+  if (containing.length > 0) {
+    return containing.reduce((a, b) => (a.text.length <= b.text.length ? a : b)).path
   }
-  return best?.path
+
+  /**
+   * Last resort, and deliberately restricted: a field short enough to sit
+   * inside the clicked line. Unrestricted, a skills group called "Tools"
+   * matched a summary sentence ending in "labelling tools" and sent the user to
+   * the wrong section entirely. Requiring a substantial field and a whole-word
+   * hit makes an accidental collision unlikely enough to be worth the reach.
+   */
+  const contained = index.filter(
+    (entry) =>
+      entry.text.length >= MIN_CONTAINED_CHARS &&
+      new RegExp(`\\b${escapeRegExp(entry.text)}\\b`).test(needle),
+  )
+  if (contained.length === 0) return undefined
+  return contained.reduce((a, b) => (a.text.length >= b.text.length ? a : b)).path
+}
+
+/** Short enough to appear inside a sentence by accident. */
+const MIN_CONTAINED_CHARS = 12
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

@@ -55,6 +55,21 @@ export function Editor() {
       // from whatever was there before the import.
       form.reset(result.profile)
       setReport(result.report)
+      // An imported resume arrives at whatever length it already was, and
+      // telling someone their own resume is too long the moment they open it is
+      // a warning about nothing they did.
+      //
+      // What matters is how long it comes out here, not how long the file was:
+      // the same content typeset differently can gain or lose a page. So the
+      // document is compiled once to find out, rather than reacting to the
+      // preview's own compile from inside an effect.
+      const pages = await compiledPageCount(result.profile, document)
+      if (pages > document.options.maxPages) {
+        setDocument((current) => ({
+          ...current,
+          options: { ...current.options, maxPages: Math.min(pages, 10) },
+        }))
+      }
     } catch {
       setImportError('That file could not be read.')
     } finally {
@@ -81,9 +96,35 @@ export function Editor() {
     // is still display:none cannot be scrolled to or focused.
     requestAnimationFrame(() => {
       const field = window.document.querySelector<HTMLElement>(`[name="${CSS.escape(path)}"]`)
-      field?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      field?.focus({ preventScroll: true })
+      if (!field) return
+
+      // A collapsed section cannot be scrolled to or focused, and the user has
+      // no way to know which one to open. Open every ancestor on the way down.
+      for (
+        let group = field.closest('details');
+        group;
+        group = group.parentElement?.closest('details') ?? null
+      ) {
+        group.open = true
+      }
+
+      field.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      field.focus({ preventScroll: true })
     })
+  }
+
+  /** Compiles once to find out how many pages the document runs to. */
+  async function compiledPageCount(next: Profile, doc: ResumeDocument): Promise<number> {
+    try {
+      const response = await fetch('/api/compile', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ profile: next, document: doc }),
+      })
+      return response.ok ? Number(response.headers.get('x-page-count') ?? 1) : 1
+    } catch {
+      return 1
+    }
   }
 
   function download() {
@@ -165,22 +206,22 @@ export function Editor() {
             {report && <ImportReport report={report} onDismiss={() => setReport(null)} />}
 
             {pane === 'content' ? (
-              <ProfileForm form={form} />
+              <ProfileForm form={form} sections={document.sections} />
             ) : (
               <DocumentControls document={document} onChange={setDocument} />
             )}
           </div>
         </section>
 
-        {/* Sized to the page it shows rather than to whatever is left over, so
-            the pane is not mostly empty margin. */}
+        {/* Both panes take an equal share and centre their own content, so the
+            page and the form sit symmetrically instead of one hugging an edge. */}
         <section
-          className={`bg-surface-sunk min-h-0 overflow-y-auto p-4 lg:w-[46%] lg:max-w-[680px] lg:shrink-0 ${
+          className={`bg-surface-sunk min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${
             showPreview ? '' : 'hidden lg:block'
           }`}
           aria-label="Preview"
         >
-          <div className="mx-auto w-full max-w-[600px]">
+          <div className="mx-auto w-full max-w-[680px]">
             <Preview compiled={compiled} onSelectField={focusField} />
           </div>
         </section>

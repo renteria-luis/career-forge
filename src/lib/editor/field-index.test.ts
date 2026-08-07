@@ -39,3 +39,50 @@ describe('findField', () => {
     expect(findField(index, 'x')).toBeUndefined()
   })
 })
+
+describe('accidental collisions', () => {
+  it('does not send a summary sentence to a skills group', () => {
+    // "Tools" is a skills group and also the last word of a summary sentence.
+    // Unrestricted containment sent every click on that line to the wrong
+    // section of the form.
+    const profile = {
+      basics: { summary: 'Structured user feedback on new features for AI/ML labelling tools.' },
+      skills: [{ name: 'Tools', keywords: ['Python'] }],
+    }
+    const index = buildFieldIndex(profile)
+    expect(
+      findField(index, 'structured user feedback on new features for AI/ML labelling tools.'),
+    ).toBe('basics.summary')
+  })
+
+  it('still reaches a field long enough to be unambiguous', () => {
+    const profile = {
+      basics: { name: 'Ana' },
+      work: [{ name: 'Nomad Analytics', position: 'Engineer' }],
+    }
+    const index = buildFieldIndex(profile)
+    expect(findField(index, 'Nomad Analytics is where I work')).toBe('work.0.name')
+  })
+})
+
+describe('dates', () => {
+  const profile = {
+    work: [{ position: 'Engineer', startDate: '2023-02', endDate: '2024-06' }],
+    education: [{ institution: 'Fanshawe', startDate: '2025-09' }],
+  }
+  const index = buildFieldIndex(profile)
+
+  it('sends a printed range to the start date', () => {
+    // The PDF prints one run for the whole range, so which half was clicked is
+    // not knowable. The two fields sit beside each other in the form.
+    expect(findField(index, 'Feb 2023 - Jun 2024')).toBe('work.0.startDate')
+  })
+
+  it('sends an open-ended range to the start date', () => {
+    expect(findField(index, 'Sep 2025 - Present')).toBe('education.0.startDate')
+  })
+
+  it('sends a single printed date to its own field', () => {
+    expect(findField(index, 'Jun 2024')).toBe('work.0.endDate')
+  })
+})
