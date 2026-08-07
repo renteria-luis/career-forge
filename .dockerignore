@@ -8,5 +8,3 @@ playwright-report
 *.md
 !README.md
 .env*
-CLAUDE.md
-.claude

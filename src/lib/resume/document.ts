@@ -75,7 +75,7 @@ export const documentOptions = z.object({
 
 export const resumeDocument = z.object({
   id: z.string(),
-  /** What the user calls this version, e.g. "Anthropic - MLE". */
+  /** What the user calls this version, e.g. "Nomad Analytics - MLE". */
   name: z.string().default('Untitled'),
   template: z.string().default('classic'),
   /** Affects wording and dates only; the interface stays English. */
