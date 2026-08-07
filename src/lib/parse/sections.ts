@@ -101,8 +101,31 @@ export interface DetectedSection {
   lines: TextLine[]
 }
 
+/** Vocabulary terms longest first, so "work experience" wins over "work". */
+const TERMS = [...LOOKUP.keys()].sort((a, b) => b.length - a.length)
+
+/**
+ * Matches a heading against the vocabulary.
+ *
+ * Exact match first, then the last words of the heading. English section
+ * headings put the noun last — "Professional Summary", "Relevant Projects",
+ * "Technical Skills" — so the tail is what carries the meaning.
+ *
+ * Matching the tail rather than anywhere in the string is deliberate: "Work
+ * Authorization" contains "work" and is not a work history, and a wrong mapping
+ * is worse than an unmapped section the user can see and correct.
+ */
 function isHeadingByVocabulary(line: TextLine): StandardSectionId | undefined {
-  return LOOKUP.get(normalise(line.text))
+  const heading = normalise(line.text)
+  if (heading === '') return undefined
+
+  const exact = LOOKUP.get(heading)
+  if (exact) return exact
+
+  for (const term of TERMS) {
+    if (heading === term || heading.endsWith(` ${term}`)) return LOOKUP.get(term)
+  }
+  return undefined
 }
 
 /**
