@@ -73,8 +73,11 @@ export function Editor() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="border-hairline bg-surface sticky top-0 z-10 border-b">
+    // A full-height shell: the header and the mobile switch keep their size and
+    // each pane scrolls on its own. Scrolling the page to reach the bottom of
+    // the preview is what this replaces, and it needs no measured offsets.
+    <div className="flex h-dvh flex-col">
+      <header className="border-hairline bg-surface z-10 shrink-0 border-b">
         <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <p className="font-display text-title text-strong mr-auto">Career Forge</p>
 
@@ -102,9 +105,11 @@ export function Editor() {
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:flex-row lg:gap-10">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col lg:flex-row">
         <section
-          className={`flex-1 lg:max-w-xl ${showPreview ? 'hidden lg:block' : ''}`}
+          className={`min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:max-w-xl ${
+            showPreview ? 'hidden lg:block' : ''
+          }`}
           aria-label="Resume content"
         >
           <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
@@ -141,12 +146,12 @@ export function Editor() {
         </section>
 
         <section
-          className={`bg-surface-sunk rounded-panel flex-1 p-4 sm:p-6 ${
+          className={`bg-surface-sunk min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${
             showPreview ? '' : 'hidden lg:block'
           }`}
           aria-label="Preview"
         >
-          <div className="mx-auto max-w-2xl lg:sticky lg:top-32">
+          <div className="mx-auto max-w-2xl">
             <Preview compiled={compiled} />
           </div>
         </section>
@@ -154,7 +159,7 @@ export function Editor() {
 
       {/* Below the large breakpoint both panes cannot fit, so one is shown at a
           time and this switches between them. */}
-      <div className="border-hairline bg-surface sticky bottom-0 border-t p-3 lg:hidden">
+      <div className="border-hairline bg-surface shrink-0 border-t p-3 lg:hidden">
         <Button
           variant="secondary"
           className="w-full"
