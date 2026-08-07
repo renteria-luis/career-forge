@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const PORT = 3100
-const baseURL = `http://127.0.0.1:${PORT}`
+// localhost, not 127.0.0.1: the dev server rejects requests whose origin does
+// not match what it announces, and reusing a running `pnpm dev` is the normal
+// local case.
+const baseURL = `http://localhost:${PORT}`
 
 export default defineConfig({
   testDir: './e2e',
