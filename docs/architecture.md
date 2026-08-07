@@ -81,6 +81,42 @@ rather than assumed:
 Committing the output keeps builds hermetic: no Python, no network, no
 generation step in CI or Docker.
 
+## Importing works the other way, and only once
+
+```
+PDF ─→ positioned lines ─→ Profile + report
+        src/lib/parse
+```
+
+Import is the one path that reads a document, and it stops at the profile.
+Nothing downstream ever consults the uploaded file again.
+
+Lines are rebuilt from glyph coordinates rather than taken as plain text. A PDF
+carries runs at positions, not paragraphs, so plain extraction runs a name
+straight into the headline below it and loses the line structure the parser
+depends on. Font weight needs the operator list walked first, because text
+extraction alone never loads fonts.
+
+Parsing is deterministic — vocabulary and typography, no model. The same code
+answers "what did this resume say" for an import and "what would a machine make
+of this resume" for the ATS check, and those have to be one answer. A model that
+helpfully inferred a missing job title would make that report a lie.
+
+Whatever the parser could not place is reported rather than guessed. The report
+is shown to the user on every import, because a parse that quietly loses half a
+work history is worse than one that admits it.
+
+## Live preview
+
+The editor holds the profile and the document, and posts both to `/api/compile`
+on a debounce. An in-flight request is aborted when newer input arrives, so the
+answer always describes the latest state.
+
+The preview draws to a canvas rather than handing the PDF to the browser's
+viewer. An iframe reloads on every new document, which blanks the page on each
+keystroke; a canvas keeps the last good page on screen until the next has
+finished drawing.
+
 ## Deployment
 
 `output: 'standalone'` traces the server and its real dependencies, including
