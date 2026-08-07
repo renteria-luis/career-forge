@@ -2,6 +2,7 @@ import type { StandardSectionId } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { parseDateRange, type DateRange } from './dates'
 import { COLUMN_BREAK, type ExtractedDocument, type TextLine } from './extract'
+import { findPlace } from './location'
 import { bodyTextSize, detectSections } from './sections'
 
 /**
@@ -306,6 +307,16 @@ function parseHeader(lines: TextLine[]): {
   }
   if (profiles.length > 0) basics.profiles = profiles
   if (profiles.length > 0 || basics.url) found.add('links')
+
+  // Location sits in the same run of details as the phone and the email.
+  const segments = lines.flatMap((line) =>
+    line.text.split(COLUMN_BREAK).flatMap((part) => part.split(/[|·•]/)),
+  )
+  const place = findPlace(segments)
+  if (place) {
+    basics.location = place
+    found.add('location')
+  }
 
   // The name is the first line that is not a contact detail. Resumes put it
   // first almost without exception, and size alone misfires on wordmark logos.
