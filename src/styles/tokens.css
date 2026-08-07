@@ -1,0 +1,125 @@
+/*
+ * Design tokens. This file is the whole visual identity.
+ *
+ * Components reference semantic names only (surface, ink, accent) and never raw
+ * hex or px. Changing the look means editing this file, not the components.
+ *
+ * Direction: a type specimen. The product compiles data into typeset documents,
+ * so its own surfaces borrow the vocabulary of proofing — bright proofing stock,
+ * hairline rules, a baseline grid, and non-repro blue for anything the user acts on.
+ */
+
+@theme {
+  /* --- palette ------------------------------------------------------------
+   * Proofing stock, not vintage book paper: bright and slightly cool, so the
+   * PDF preview sitting on it reads as the warmer object of the two.
+   */
+  --color-paper: #fcfbf9;
+  --color-paper-sunk: #f4f2ed;
+  --color-ink: #1a1917;
+  --color-graphite: #6b6862;
+  --color-rule: #e4e0d8;
+
+  /* Non-repro blue: the pencil traditionally used to mark up a galley proof
+   * because the camera could not see it. Every interactive affordance is blue;
+   * nothing decorative is. */
+  --color-proof: #23458c;
+  --color-proof-sunk: #eef1f8;
+
+  /* Correction-mark red. Reserved for the smoke detector and validation errors —
+   * never for emphasis. If it is red, something needs the user's attention. */
+  --color-flag: #a83a26;
+  --color-flag-sunk: #fbeeeb;
+
+  --color-confirm: #2f6b46;
+
+  /* --- type ---------------------------------------------------------------
+   * Newsreader: a reading face with optical sizes. It carries the personality
+   * and appears only at display sizes, where its contrast is the point.
+   * Instrument Sans: the workhorse. Most of this app is dense forms, and forms
+   * are won at 14px, not at 72px.
+   * IBM Plex Mono: parsed values, compile output, field keys — anything the
+   * machine produced rather than the human.
+   */
+  --font-display: var(--font-newsreader), ui-serif, Georgia, serif;
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --text-display-xl: 4.5rem;
+  --text-display-xl--line-height: 1.02;
+  --text-display-xl--letter-spacing: -0.02em;
+  --text-display-l: 3rem;
+  --text-display-l--line-height: 1.06;
+  --text-display-l--letter-spacing: -0.018em;
+  --text-display-m: 2rem;
+  --text-display-m--line-height: 1.14;
+  --text-display-m--letter-spacing: -0.012em;
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.3;
+  --text-body: 1rem;
+  --text-body--line-height: 1.6;
+  --text-small: 0.875rem;
+  --text-small--line-height: 1.5;
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1.4;
+  --text-micro--letter-spacing: 0.08em;
+
+  /* --- rhythm -------------------------------------------------------------
+   * Everything vertical is a multiple of the baseline so the UI sits on the
+   * same grid as the document it produces.
+   */
+  --spacing-baseline: 0.5rem;
+
+  /* Measure: 66 characters is the readable maximum for body copy, and it is
+   * also what the resume template enforces. Same constant, both places. */
+  --container-measure: 34rem;
+
+  /* --- form -------------------------------------------------------------- */
+  --radius-edge: 3px;
+  --radius-panel: 6px;
+}
+
+/* --- semantic layer -------------------------------------------------------
+ * Components use these. They flip with the theme; the palette above does not.
+ */
+:root {
+  --surface: var(--color-paper);
+  --surface-sunk: var(--color-paper-sunk);
+  --text-strong: var(--color-ink);
+  --text-muted: var(--color-graphite);
+  --hairline: var(--color-rule);
+  --accent: var(--color-proof);
+  --accent-sunk: var(--color-proof-sunk);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --surface: #16151a;
+    --surface-sunk: #1e1d23;
+    --text-strong: #f2f0ec;
+    --text-muted: #9d9a94;
+    --hairline: #302e36;
+    --accent: #8aa6e8;
+    --accent-sunk: #22263a;
+  }
+}
+
+:root[data-theme='dark'] {
+  --surface: #16151a;
+  --surface-sunk: #1e1d23;
+  --text-strong: #f2f0ec;
+  --text-muted: #9d9a94;
+  --hairline: #302e36;
+  --accent: #8aa6e8;
+  --accent-sunk: #22263a;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-sunk: var(--surface-sunk);
+  --color-strong: var(--text-strong);
+  --color-muted: var(--text-muted);
+  --color-hairline: var(--hairline);
+  --color-accent: var(--accent);
+  --color-accent-sunk: var(--accent-sunk);
+}

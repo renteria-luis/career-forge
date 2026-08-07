@@ -1,5 +1,5 @@
 /** @type {import('@commitlint/types').UserConfig} */
-export default {
+const config = {
   extends: ['@commitlint/config-conventional'],
   rules: {
     // Explanations belong in the body. Keep the subject scannable in `git log --oneline`.
@@ -23,3 +23,5 @@ export default {
     ],
   },
 }
+
+export default config
