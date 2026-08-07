@@ -127,6 +127,15 @@ interface RawEntry {
   endDate?: string
   summary?: string
   highlights: string[]
+  /** A line under the entry that is nothing but an address. */
+  url?: string
+}
+
+/** True when a line is an address and nothing else. */
+function isBareUrl(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed === '' || /\s/.test(trimmed)) return false
+  return new RegExp(`^(?:${URL.source})$`, 'i').test(trimmed)
 }
 
 /**
@@ -158,6 +167,13 @@ function groupEntries(lines: TextLine[], bodySize: number): RawEntry[] {
       if (!current) current = { highlights: [] }
       if (highlight) current.highlights.push(highlight)
       bulletX = line.x
+      continue
+    }
+
+    // Projects and portfolios put a repository address on its own line under
+    // the title. It is a field, not a sentence, so it must not land in prose.
+    if (current && !current.url && isBareUrl(text)) {
+      current.url = /^https?:/i.test(text.trim()) ? text.trim() : `https://${text.trim()}`
       continue
     }
 
@@ -408,15 +424,24 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
         institution: e.subtitle,
         startDate: dated[i].startDate,
         endDate: dated[i].endDate,
+        // GPA, honours and coursework sit under a degree the way achievements
+        // sit under a job, so they arrive as the entry's bullets.
+        courses: dated[i].highlights,
+        url: e.url,
       }))
       break
     case 'projects':
       profile.projects = entries.map((e, i) => ({
         name: e.title,
-        description: e.subtitle ?? dated[i].summary,
+        // "Pipeline | Python, Pandas, SQL" puts the stack after a pipe on the
+        // title line. Read as a description it becomes a sentence that is not
+        // one; read as keywords it is what it actually is.
+        keywords: e.subtitle ? splitKeywords(e.subtitle) : undefined,
+        description: dated[i].summary,
         highlights: dated[i].highlights,
         startDate: dated[i].startDate,
         endDate: dated[i].endDate,
+        url: e.url,
       }))
       break
     case 'certificates':
