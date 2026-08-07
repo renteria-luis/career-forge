@@ -6,7 +6,15 @@ import {
   type ResumeDocument,
   type StandardSectionId,
 } from '@/lib/resume/document'
-import { FONTS, FONT_SIZE_MAX, FONT_SIZE_MIN, type FontId } from '@/lib/resume/typography'
+import {
+  FONTS,
+  FONT_SIZE_MAX,
+  FONT_SIZE_MIN,
+  MARGIN_MAX,
+  MARGIN_MIN,
+  MARGIN_STEP,
+  type FontId,
+} from '@/lib/resume/typography'
 import { FormSection } from './entry-card'
 import { Button, Select, Slider, Toggle } from './fields'
 
@@ -155,10 +163,10 @@ export function DocumentControls({
 
         <Slider
           label="Margin"
-          value={`${document.typography.margin} mm`}
-          min={12}
-          max={30}
-          step={1}
+          value={`${document.typography.margin} px`}
+          min={MARGIN_MIN}
+          max={MARGIN_MAX}
+          step={MARGIN_STEP}
           defaultValue={document.typography.margin}
           onChange={(event) =>
             onChange({

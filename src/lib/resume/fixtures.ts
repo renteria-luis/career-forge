@@ -78,7 +78,7 @@ export const sampleDocument: ResumeDocument = {
   name: 'Sample',
   template: 'classic',
   locale: 'en',
-  typography: { font: 'source-sans', size: 10.5, margin: 18, density: 1 },
+  typography: { font: 'source-sans', size: 10.5, margin: 64, density: 1 },
   options: {
     maxPages: 1,
     headline: 'ML Engineer | Data Scientist',
