@@ -22,7 +22,8 @@
 
 #set page(
   paper: "a4",
-  margin: page-opts.margin * 1mm,
+  // The model carries CSS pixels; 1px is exactly 0.75pt.
+  margin: page-opts.margin * 0.75pt,
 )
 
 #set text(
@@ -35,7 +36,11 @@
 
 #set par(justify: false, leading: 0.62em * d)
 
-#show link: it => underline(offset: 2pt, it)
+// Links look like links. A reader has to be able to tell that the portfolio
+// address is clickable, and the same styling on screen and on paper is what
+// people already recognise from every other document.
+#let link-blue = rgb("#1155cc")
+#show link: it => text(fill: link-blue, underline(offset: 1.5pt, it))
 
 // Bullets are set tight: a resume is scanned, not read.
 #set list(marker: [•], indent: 0pt, body-indent: 6pt, spacing: 0.5em * d)
@@ -92,9 +97,19 @@
   ]
 ]
 
+// Each contact detail prints its label and links to its href when it has one,
+// so "jamessmith.dev" is what appears and the full address is what opens.
+#let contact-item(item) = {
+  if "href" in item and item.href != none {
+    link(item.href, item.label)
+  } else {
+    item.label
+  }
+}
+
 #if data.contacts.len() > 0 [
   #block(above: 0.42em * d, below: 0em)[
-    #text(size: 0.92em, data.contacts.join("  ·  "))
+    #text(size: 0.92em, data.contacts.map(contact-item).join(text(fill: luma(120))[ #h(0.25em) | #h(0.25em) ]))
   ]
 ]
 

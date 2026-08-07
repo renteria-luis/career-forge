@@ -36,11 +36,22 @@ export interface RenderSection {
   entries: RenderEntry[]
 }
 
+/**
+ * One contact detail. `label` is what prints; `href` is what it links to when
+ * there is somewhere to go. They differ on purpose — a resume shows
+ * "jamessmith.dev" and links to "https://jamessmith.dev", because the scheme
+ * is noise on paper and required in the link.
+ */
+export interface Contact {
+  label: string
+  href?: string
+}
+
 export interface RenderModel {
   name: string
   headline?: string
   /** Already filtered by the document's show* options, in display order. */
-  contacts: string[]
+  contacts: Contact[]
   sections: RenderSection[]
   page: {
     /** The Typst family name, not our id. */
@@ -70,7 +81,7 @@ export function formatDate(value?: string): string | undefined {
 export function formatRange(start?: string, end?: string): string | undefined {
   const from = formatDate(start)
   const to = end ? formatDate(end) : from ? 'Present' : undefined
-  if (from && to) return `${from} – ${to}`
+  if (from && to) return `${from} - ${to}`
   return from ?? to
 }
 
@@ -251,22 +262,39 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
   return { title, layout, entries }
 }
 
-function buildContacts(profile: Profile, doc: ResumeDocument): string[] {
+/** "https://www.github.com/x" prints as "github.com/x". */
+function readableUrl(url: string): string {
+  return url
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/$/, '')
+}
+
+function buildContacts(profile: Profile, doc: ResumeDocument): Contact[] {
   const { options } = doc
   const b = profile.basics
-  const parts: (string | undefined)[] = [
-    options.showEmail ? b?.email : undefined,
-    options.showPhone ? b?.phone : undefined,
-    options.showLocation
-      ? [b?.location?.city, b?.location?.countryCode].filter(Boolean).join(', ') || undefined
-      : undefined,
-    options.showUrl ? b?.url : undefined,
-  ]
-  if (options.showUrl) {
-    // A bare username is meaningless on paper; show the address someone can type.
-    parts.push(...(b?.profiles ?? []).map((p) => p.url).filter(Boolean))
+  const contacts: Contact[] = []
+
+  if (options.showEmail && b?.email) {
+    contacts.push({ label: b.email, href: `mailto:${b.email}` })
   }
-  return parts.filter((p): p is string => Boolean(p && p.trim()))
+  if (options.showPhone && b?.phone) {
+    // tel: makes the number tappable when the PDF is read on a phone.
+    contacts.push({ label: b.phone, href: `tel:${b.phone.replace(/[^\d+]/g, '')}` })
+  }
+  if (options.showLocation) {
+    const place = [b?.location?.city, b?.location?.countryCode].filter(Boolean).join(', ')
+    if (place) contacts.push({ label: place })
+  }
+  if (options.showUrl) {
+    if (b?.url) contacts.push({ label: readableUrl(b.url), href: b.url })
+    // A bare username is meaningless on paper; show the address someone can type.
+    for (const p of b?.profiles ?? []) {
+      if (p.url) contacts.push({ label: readableUrl(p.url), href: p.url })
+    }
+  }
+
+  return contacts.filter((c) => c.label.trim() !== '')
 }
 
 export function buildRenderModel(profile: Profile, doc: ResumeDocument): RenderModel {
