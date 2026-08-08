@@ -253,7 +253,6 @@ export function Editor() {
           <Button onClick={() => fileRef.current?.click()} disabled={importing}>
             {importing ? 'Reading…' : 'Import a PDF'}
           </Button>
-          <Button onClick={() => setConfirmingClear(true)}>Clear</Button>
           <Button variant="primary" onClick={download} disabled={!compiled.bytes}>
             Download
           </Button>
@@ -319,20 +318,23 @@ export function Editor() {
         >
           <div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Segmented
-                label="Paper size"
-                value={document.typography.paper}
-                options={(Object.keys(PAPERS) as PaperId[]).map((id) => ({
-                  value: id,
-                  label: PAPERS[id].label,
-                }))}
-                onChange={(paper) =>
-                  setDocument((current) => ({
-                    ...current,
-                    typography: { ...current.typography, paper },
-                  }))
-                }
-              />
+              <div className="flex items-center gap-2">
+                <Segmented
+                  label="Paper size"
+                  value={document.typography.paper}
+                  options={(Object.keys(PAPERS) as PaperId[]).map((id) => ({
+                    value: id,
+                    label: PAPERS[id].label,
+                  }))}
+                  onChange={(paper) =>
+                    setDocument((current) => ({
+                      ...current,
+                      typography: { ...current.typography, paper },
+                    }))
+                  }
+                />
+                <Button onClick={() => setConfirmingClear(true)}>Clear</Button>
+              </div>
               <div className="flex items-center gap-2">
                 {rearrange && (
                   <Segmented

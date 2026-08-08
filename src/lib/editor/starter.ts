@@ -77,6 +77,9 @@ export function toFormValues(profile: Profile): Profile {
         countryCode: '',
         ...profile.basics?.location,
       },
+      // Named explicitly, or clearing leaves the previous GitHub and LinkedIn
+      // links in place — the same reason every other field is named here.
+      profiles: profile.basics?.profiles ?? [],
     },
   }
 }

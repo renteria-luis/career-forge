@@ -196,28 +196,34 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
   return (
     <form className="flex flex-col" onSubmit={(event) => event.preventDefault()}>
       <FormSection title="You">
-        <Field label="Full name" {...register('basics.name')} placeholder="Ana Ruiz Peña" />
+        <Field label="Full name" {...register('basics.name')} placeholder="James Smith" />
         <Field
           label="Headline"
           hint="Sits under your name. Leave it empty if you would rather not have one."
-          placeholder="ML Engineer | Data Scientist"
+          placeholder="Data Analyst | SQL | Python"
           {...register('basics.label')}
         />
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
             label="Email"
             type="email"
-            placeholder="ana@example.com"
+            placeholder="james@example.com"
             error={errors.basics?.email?.message}
             {...register('basics.email')}
           />
-          <Field label="Phone" placeholder="+51 999 888 777" {...register('basics.phone')} />
-          <Field label="City" placeholder="Lima" {...register('basics.location.city')} />
-          <Field label="Country" placeholder="PE" {...register('basics.location.countryCode')} />
+          {/* Digits, a plus and hyphens only. Parentheses are what break
+              parsers: "(123) 456-7890" comes back as "(123456-7890". */}
+          <Field label="Phone" placeholder="+1 987-654-3210" {...register('basics.phone')} />
+          <Field label="City" placeholder="Toronto, ON" {...register('basics.location.city')} />
+          <Field
+            label="Country"
+            placeholder="Canada"
+            {...register('basics.location.countryCode')}
+          />
         </div>
         <Field
           label="Website"
-          placeholder="anaruiz.me"
+          placeholder="www.yoursite.com"
           error={errors.basics?.url?.message}
           {...register('basics.url')}
         />
