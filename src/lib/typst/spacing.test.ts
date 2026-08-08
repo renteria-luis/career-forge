@@ -21,7 +21,7 @@ const document = {
 }
 const { lines } = await extractLines(compileResume(sampleProfile, document).pdf)
 
-const HEADINGS = ['SUMMARY', 'EXPERIENCE', 'PROJECTS', 'EDUCATION', 'SKILLS']
+const HEADINGS = ['PROFESSIONAL SUMMARY', 'EXPERIENCE', 'PROJECTS', 'EDUCATION', 'SKILLS']
 
 function indexOf(prefix: string): number {
   const index = lines.findIndex((line) => line.text.startsWith(prefix))
@@ -42,7 +42,7 @@ function gapAbove(index: number): number {
 }
 
 // The second line of the summary, whatever it happens to say.
-const withinParagraph = gapAbove(headingIndex('SUMMARY') + 2)
+const withinParagraph = gapAbove(headingIndex('PROFESSIONAL SUMMARY') + 2)
 const betweenBullets = gapAbove(indexOf('• Owned the ranking service'))
 const betweenEntries = gapAbove(indexOf('Data Scientist'))
 const sectionGaps = lines

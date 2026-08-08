@@ -1,4 +1,4 @@
-import { FONTS } from '@/lib/resume/typography'
+import { FONTS, PAPERS } from '@/lib/resume/typography'
 import type { DocumentSection, ResumeDocument, StandardSectionId } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 
@@ -17,6 +17,15 @@ import type { Profile } from '@/lib/resume/profile'
 export type SectionLayout = 'prose' | 'entries' | 'inline' | 'joined'
 
 export interface RenderEntry {
+  /**
+   * Where this entry lives in the profile, e.g. "work.2".
+   *
+   * The render model drops entries that would print nothing, so a position in
+   * the drawn document is not a position in the data. Rearranging on the page
+   * has to move the right one, which means carrying the original index rather
+   * than counting what came out.
+   */
+  ref?: string
   title?: string
   subtitle?: string
   /** Right-aligned, usually a date range. */
@@ -32,6 +41,8 @@ export interface RenderEntry {
 }
 
 export interface RenderSection {
+  /** The document section this was drawn from, e.g. "work". */
+  ref: string
   title: string
   layout: SectionLayout
   /** Only set when layout is 'prose'. */
@@ -57,6 +68,8 @@ export interface RenderModel {
   contacts: Contact[]
   sections: RenderSection[]
   page: {
+    /** What Typst calls the paper, not our id. */
+    paper: string
     /** The Typst family name, not our id. */
     font: string
     size: number
@@ -105,7 +118,7 @@ export function formatRange(start?: string, end?: string): string | undefined {
 }
 
 const DEFAULT_TITLES: Record<StandardSectionId, string> = {
-  summary: 'Summary',
+  summary: 'Professional Summary',
   work: 'Experience',
   education: 'Education',
   skills: 'Skills',
@@ -139,7 +152,8 @@ const LAYOUTS: Record<StandardSectionId, SectionLayout> = {
 function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
   switch (id) {
     case 'work':
-      return (profile.work ?? []).map((w) => ({
+      return (profile.work ?? []).map((w, i) => ({
+        ref: `work.${i}`,
         title: w.position,
         subtitle: w.name,
         meta: formatRange(w.startDate, w.endDate),
@@ -148,7 +162,8 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         url: w.url,
       }))
     case 'volunteer':
-      return (profile.volunteer ?? []).map((v) => ({
+      return (profile.volunteer ?? []).map((v, i) => ({
+        ref: `volunteer.${i}`,
         title: v.position,
         subtitle: v.organization,
         meta: formatRange(v.startDate, v.endDate),
@@ -157,7 +172,8 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         url: v.url,
       }))
     case 'education':
-      return (profile.education ?? []).map((e) => ({
+      return (profile.education ?? []).map((e, i) => ({
+        ref: `education.${i}`,
         title: [e.studyType, e.area].filter(Boolean).join(', ') || undefined,
         subtitle: e.institution,
         meta: formatRange(e.startDate, e.endDate),
@@ -168,7 +184,8 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         url: e.url,
       }))
     case 'projects':
-      return (profile.projects ?? []).map((p) => ({
+      return (profile.projects ?? []).map((p, i) => ({
+        ref: `projects.${i}`,
         title: p.name,
         subtitle: p.roles?.join(', ') || p.entity,
         meta: formatRange(p.startDate, p.endDate),
@@ -178,7 +195,8 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         url: p.url,
       }))
     case 'skills':
-      return (profile.skills ?? []).map((s) => ({
+      return (profile.skills ?? []).map((s, i) => ({
+        ref: `skills.${i}`,
         title: s.name,
         keywords: s.keywords,
       }))
@@ -193,21 +211,24 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         keywords: i.keywords,
       }))
     case 'certificates':
-      return (profile.certificates ?? []).map((c) => ({
+      return (profile.certificates ?? []).map((c, i) => ({
+        ref: `certificates.${i}`,
         title: c.name,
         subtitle: c.issuer,
         meta: formatDate(c.date),
         url: c.url,
       }))
     case 'awards':
-      return (profile.awards ?? []).map((a) => ({
+      return (profile.awards ?? []).map((a, i) => ({
+        ref: `awards.${i}`,
         title: a.title,
         subtitle: a.awarder,
         meta: formatDate(a.date),
         summary: a.summary,
       }))
     case 'publications':
-      return (profile.publications ?? []).map((p) => ({
+      return (profile.publications ?? []).map((p, i) => ({
+        ref: `publications.${i}`,
         title: p.name,
         subtitle: p.publisher,
         meta: formatDate(p.releaseDate),
@@ -254,6 +275,7 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
     const selected = section.entryIds ? all.filter((e) => section.entryIds?.includes(e.id)) : all
     const entries = selected
       .map((e) => ({
+        ref: e.id,
         title: e.title,
         subtitle: e.subtitle,
         meta: formatRange(e.startDate, e.endDate),
@@ -265,7 +287,7 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
       .filter(hasContent)
       .map(withUrlLabel)
     if (entries.length === 0) return null
-    return { title: section.title ?? custom.title, layout: 'entries', entries }
+    return { ref: section.id, title: section.title ?? custom.title, layout: 'entries', entries }
   }
 
   const id = section.id as StandardSectionId
@@ -275,7 +297,7 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
 
   if (id === 'summary') {
     const body = profile.basics?.summary
-    return body ? { title, layout: 'prose', body, entries: [] } : null
+    return body ? { ref: id, title, layout: 'prose', body, entries: [] } : null
   }
 
   const all = buildStandard(id, profile)
@@ -287,7 +309,7 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
     .filter(hasContent)
     .map(withUrlLabel)
   if (entries.length === 0) return null
-  return { title, layout, entries }
+  return { ref: id, title, layout, entries }
 }
 
 function buildContacts(profile: Profile, doc: ResumeDocument): Contact[] {
@@ -334,6 +356,7 @@ export function buildRenderModel(profile: Profile, doc: ResumeDocument): RenderM
       .map((s) => buildSection(s, profile))
       .filter((s): s is RenderSection => s !== null),
     page: {
+      paper: PAPERS[doc.typography.paper].typst,
       font: FONTS[doc.typography.font].family,
       size: doc.typography.size,
       margin: doc.typography.margin,
