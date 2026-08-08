@@ -112,6 +112,12 @@ test.describe('checking a resume', () => {
   })
 
   test('hands what it read to the editor', async ({ page, request }) => {
+    // There must be exactly one copy of pdf.js in the application. Two register
+    // two workers and the first to claim the global wins, which made this exact
+    // journey fail with "The API version does not match the Worker version".
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+
     const pdf = await compiledResume(request, complete)
     await page.goto('/ats-check')
     await page.setInputFiles('input[type=file]', {
@@ -127,5 +133,12 @@ test.describe('checking a resume', () => {
 
     await expect(page).toHaveURL(/\/editor$/)
     await expect(page.getByLabel('Full name')).toHaveValue('Ana Ruiz', { timeout: 20_000 })
+
+    // The preview has to draw without a refresh, which is what the version
+    // clash prevented. On a phone it is the other view, so ask for it.
+    const toggle = page.getByRole('button', { name: 'See the preview' })
+    if (await toggle.isVisible()) await toggle.click()
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 20_000 })
+    expect(errors).toEqual([])
   })
 })

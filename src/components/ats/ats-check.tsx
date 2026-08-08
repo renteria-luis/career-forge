@@ -67,6 +67,13 @@ export function AtsCheck() {
         typography: analysis.parse.paper
           ? { ...document.typography, paper: analysis.parse.paper }
           : document.typography,
+        // Start from the length the file already was. Opening the editor to a
+        // warning about a resume the reader has not touched is a warning about
+        // nothing they did.
+        options: {
+          ...document.options,
+          maxPages: Math.min(Math.max(analysis.report.pages, 1), 10),
+        },
       },
     })
     router.push('/editor')

@@ -8,10 +8,12 @@ const nextConfig: NextConfig = {
   output: 'standalone',
 
   /**
-   * The Typst compiler is a native binding. Bundling it breaks the .node file
-   * resolution, so it has to stay external and be required at runtime.
+   * The Typst compiler is a native binding: bundling it breaks the .node file
+   * resolution. pdf.js resolves its own worker and standard-font files at
+   * runtime, which a bundler rewrites out from under it. Both have to stay
+   * external and be required as they are.
    */
-  serverExternalPackages: ['@myriaddreamin/typst-ts-node-compiler'],
+  serverExternalPackages: ['@myriaddreamin/typst-ts-node-compiler', 'pdfjs-dist'],
 }
 
 export default nextConfig

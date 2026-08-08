@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
+import { loadPdfjs } from '@/lib/parse/pdfjs'
 import type { CompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { RearrangeOverlay, type RearrangeMode } from './rearrange-overlay'
 
@@ -14,21 +15,6 @@ import { RearrangeOverlay, type RearrangeMode } from './rearrange-overlay'
  * has finished drawing, which is what makes this read as live rather than as
  * something reloading over and over.
  */
-
-let pdfjs: typeof import('pdfjs-dist') | null = null
-
-async function loadPdfjs() {
-  if (pdfjs) return pdfjs
-  // Loaded on demand, in the browser only: the library and its worker are far
-  // too large to sit in the initial bundle of a page that may never show a PDF.
-  const library = await import('pdfjs-dist')
-  library.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-  ).toString()
-  pdfjs = library
-  return library
-}
 
 /** A run of text and where it was drawn, in canvas pixels. */
 interface TextBox {
