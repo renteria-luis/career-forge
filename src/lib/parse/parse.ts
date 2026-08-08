@@ -1,7 +1,7 @@
 import type { StandardSectionId } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
-import { parseDateRange } from './dates'
-import type { ExtractedDocument, TextLine } from './extract'
+import { parseDateRange, type DateRange } from './dates'
+import { COLUMN_BREAK, type ExtractedDocument, type TextLine } from './extract'
 import { bodyTextSize, detectSections } from './sections'
 
 /**
@@ -31,10 +31,74 @@ export interface ParseResult {
 }
 
 const EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+/
-const URL = /\bhttps?:\/\/[^\s,;]+|\b(?:www\.|github\.com\/|linkedin\.com\/)[^\s,;]+/i
+
+/**
+ * Nobody writes "https://" on a resume, so a bare domain has to be recognised.
+ * Anchored on a known top-level domain rather than "any dot", or "Node.js",
+ * "e.g." and version numbers all read as addresses.
+ */
+const TLD =
+  'com|me|dev|io|net|org|co|ai|app|xyz|tech|page|site|info|edu|gov|design|studio|' +
+  'ca|us|uk|es|pe|mx|ar|cl|br|de|fr|it|nl|se|jp|in|au'
+const URL = new RegExp(
+  `\\bhttps?://[^\\s,;|]+|\\b(?:[a-z0-9-]+\\.)+(?:${TLD})\\b(?:/[^\\s,;|]*)?`,
+  'i',
+)
 // Loose on purpose: phone formats vary by country far more than resumes do.
 const PHONE = /(?:\+?\d[\d\s().-]{7,}\d)/
 const BULLET = /^[•\-*‣▪·—–]\s*/
+
+/**
+ * How much further right a line must sit to count as a wrapped continuation
+ * rather than a new line of its own. Hanging indents are several points; this
+ * is small enough to catch them and large enough to survive rounding.
+ */
+const INDENT_TOLERANCE = 2
+
+/** Removes any column marker, for text going into a profile field. */
+function flatten(text: string): string {
+  return text.split(COLUMN_BREAK).join(' ').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Splits an entry line into its columns and pulls the date off the right.
+ *
+ * Templates right-align the date against the title on the same line, so the
+ * rightmost column is where it lives. Reading it from there rather than
+ * searching the whole line is what keeps trailing qualifiers attached to it —
+ * "Sep 2025 - Present (Expected Dec 2026)" is one date column, and hunting for
+ * a range inside the whole line stripped only part of it and left the remainder
+ * stuck on the end of the degree title.
+ */
+function splitColumns(text: string): { left: string; date?: DateRange } {
+  const columns = text.split(COLUMN_BREAK)
+  if (columns.length > 1) {
+    const last = columns.at(-1)!.trim()
+    const date = parseDateRange(last)
+    // A right-aligned date column opens with the date. Judging by where the
+    // match starts rather than how much of the column it covers is what keeps
+    // trailing qualifiers with it: "Sep 2025 - Present (Expected Dec 2026)" is
+    // one date column, and a length test throws the qualifier back onto the
+    // degree title.
+    if (date && last.indexOf(date.matched) <= 2) {
+      return { left: columns.slice(0, -1).join(' ').trim(), date }
+    }
+  }
+  const flat = flatten(text)
+  const date = parseDateRange(flat)
+  if (!date) return { left: flat }
+
+  // A long title can sit close enough to its date that no column break is
+  // detected, and then removing just the range leaves the qualifier behind —
+  // "… (Co-op) (Expected Dec 2026)". Any trailing parenthetical carrying a year
+  // belongs to the date, not the title.
+  const left = flat
+    .replace(date.matched, ' ')
+    .replace(/\((?:[^()]*\b(?:19|20)\d{2}\b[^()]*)\)\s*$/, '')
+    .replace(/[\s|·—–,-]+$/, '')
+    .trim()
+  return { left, date }
+}
 
 /** Splits a heading line into a title and whatever follows a separator. */
 function splitTitle(text: string): { title?: string; subtitle?: string } {
@@ -65,42 +129,61 @@ interface RawEntry {
 function groupEntries(lines: TextLine[], bodySize: number): RawEntry[] {
   const entries: RawEntry[] = []
   let current: RawEntry | undefined
+  /**
+   * Left edge of the bullet currently being read.
+   *
+   * A bullet that runs past one line wraps with a hanging indent, so the
+   * continuation sits further right than the marker while carrying no marker of
+   * its own. Without this it reads as loose prose, and half of every long
+   * bullet ends up in the entry description instead of the bullet it belongs to.
+   */
+  let bulletX: number | undefined
 
   for (const line of lines) {
     const text = line.text.trim()
     if (text === '') continue
 
     if (BULLET.test(text)) {
-      const highlight = text.replace(BULLET, '').trim()
+      const highlight = flatten(text.replace(BULLET, ''))
       if (!current) current = { highlights: [] }
       if (highlight) current.highlights.push(highlight)
+      bulletX = line.x
       continue
     }
 
-    const range = parseDateRange(text)
-    const opensEntry = Boolean(range) || (line.bold && line.size >= bodySize)
+    const lastHighlight = current?.highlights.at(-1)
+    if (bulletX !== undefined && lastHighlight && line.x > bulletX + INDENT_TOLERANCE) {
+      current!.highlights[current!.highlights.length - 1] = `${lastHighlight} ${flatten(text)}`
+      continue
+    }
+
+    const { left, date } = splitColumns(text)
+    const opensEntry = Boolean(date) || (line.bold && line.size >= bodySize)
 
     if (opensEntry) {
       if (current) entries.push(current)
-      const withoutDate = range ? text.replace(range.matched, '').trim() : text
-      const { title, subtitle } = splitTitle(withoutDate.replace(/[|·—–,]\s*$/, '').trim())
+      bulletX = undefined
+      const { title, subtitle } = splitTitle(left.replace(/[|·—–,]\s*$/, '').trim())
       current = {
         title,
         subtitle,
-        startDate: range?.startDate,
-        endDate: range?.endDate,
+        startDate: date?.startDate,
+        endDate: date?.endDate,
         highlights: [],
       }
       continue
     }
 
     if (!current) current = { highlights: [] }
-    // The line under a job title is the employer in most layouts. Once that
-    // slot is taken, further prose is a description.
+    // The line under a job title is the employer, and anything right-aligned
+    // beside it is the location — which the standard has no field for, so only
+    // the employer is kept.
+    const [firstColumn] = text.split(COLUMN_BREAK)
     if (!current.subtitle && current.highlights.length === 0 && !current.summary) {
-      current.subtitle = text
+      current.subtitle = flatten(firstColumn)
     } else {
-      current.summary = current.summary ? `${current.summary} ${text}` : text
+      const line = flatten(text)
+      current.summary = current.summary ? `${current.summary} ${line}` : line
     }
   }
 
@@ -116,7 +199,7 @@ interface KeywordItem {
 /** Sections that are really a list, not a set of dated entries. */
 function toKeywordList(lines: TextLine[]): KeywordItem[] {
   return lines.flatMap<KeywordItem>((line) => {
-    const text = line.text.replace(BULLET, '').trim()
+    const text = flatten(line.text.replace(BULLET, ''))
     if (text === '') return []
     const colon = text.indexOf(':')
     if (colon > 0 && colon < 40) {
@@ -142,7 +225,7 @@ function parseHeader(lines: TextLine[]): {
 } {
   const found = new Set<string>()
   const basics: NonNullable<Profile['basics']> = {}
-  const joined = lines.map((l) => l.text).join(' ')
+  const joined = lines.map((l) => l.text.split(COLUMN_BREAK).join(' ')).join(' ')
 
   const email = EMAIL.exec(joined)?.[0]
   if (email) {
@@ -155,27 +238,37 @@ function parseHeader(lines: TextLine[]): {
     found.add('phone')
   }
 
-  const urls = [...joined.matchAll(new RegExp(URL, 'gi'))].map((m) => m[0].replace(/[.,;]$/, ''))
-  const profiles = urls.map((url) => {
-    const withScheme = /^https?:/i.test(url) ? url : `https://${url}`
-    const network = /github/i.test(url) ? 'GitHub' : /linkedin/i.test(url) ? 'LinkedIn' : 'Website'
-    return { network, url: withScheme }
-  })
-  if (profiles.length > 0) {
-    basics.profiles = profiles
-    found.add('links')
+  // Strip the email out first: its domain would otherwise read as a bare URL.
+  const withoutEmails = joined.replace(new RegExp(EMAIL, 'gi'), ' ')
+  const urls = [
+    ...new Set(
+      [...withoutEmails.matchAll(new RegExp(URL, 'gi'))].map((m) => m[0].replace(/[.,;]$/, '')),
+    ),
+  ]
+
+  const profiles: { network: string; url: string }[] = []
+  for (const raw of urls) {
+    const href = /^https?:/i.test(raw) ? raw : `https://${raw}`
+    if (/github\./i.test(raw)) profiles.push({ network: 'GitHub', url: href })
+    else if (/linkedin\./i.test(raw)) profiles.push({ network: 'LinkedIn', url: href })
+    // A personal site is the person's own address, not a profile on someone
+    // else's platform, so it belongs in basics.url where the template expects it.
+    else if (!basics.url) basics.url = href
+    else profiles.push({ network: 'Website', url: href })
   }
+  if (profiles.length > 0) basics.profiles = profiles
+  if (profiles.length > 0 || basics.url) found.add('links')
 
   // The name is the first line that is not a contact detail. Resumes put it
   // first almost without exception, and size alone misfires on wordmark logos.
   const contactish = (text: string) => EMAIL.test(text) || URL.test(text) || PHONE.test(text)
   const nameLine = lines.find((l) => l.text.trim() !== '' && !contactish(l.text))
   if (nameLine) {
-    basics.name = nameLine.text.trim()
+    basics.name = flatten(nameLine.text)
     found.add('name')
     const after = lines[lines.indexOf(nameLine) + 1]
     if (after && !contactish(after.text) && after.text.trim().length <= 80) {
-      basics.label = after.text.trim()
+      basics.label = flatten(after.text)
       found.add('headline')
     }
   }
@@ -208,7 +301,7 @@ export function parseResume(document: ExtractedDocument): ParseResult {
 
     switch (section.id) {
       case 'summary':
-        basics.summary = section.lines.map((l) => l.text.trim()).join(' ')
+        basics.summary = section.lines.map((l) => flatten(l.text)).join(' ')
         entryCount = basics.summary ? 1 : 0
         break
       case 'skills':

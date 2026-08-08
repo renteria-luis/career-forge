@@ -1,10 +1,16 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('pages render', () => {
-  test('the home page names the product and links onward', async ({ page }) => {
+  test('the home page states the thesis and routes into the editor', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Career Forge')
-    await page.getByRole('link', { name: 'View the design system' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('A resume is data')
+    await page.getByRole('link', { name: 'Start writing' }).click()
+    await expect(page).toHaveURL(/\/editor$/)
+  })
+
+  test('the home page links to the design system', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('link', { name: 'The design system' }).click()
     await expect(page).toHaveURL(/\/design$/)
   })
 

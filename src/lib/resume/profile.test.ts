@@ -76,3 +76,20 @@ describe('blank input', () => {
     expect(profile.parse({ basics: { name: '   ' } }).basics).toEqual({})
   })
 })
+
+describe('urls', () => {
+  it.each([
+    ['jamessmith.dev', 'https://jamessmith.dev'],
+    ['www.example.com', 'https://www.example.com'],
+    ['github.com/octocat', 'https://github.com/octocat'],
+    ['https://example.com', 'https://example.com'],
+    ['http://example.com', 'http://example.com'],
+  ])('accepts %s as %s', (input, expected) => {
+    // Nobody types a scheme on a resume, and a link without one is not clickable.
+    expect(profile.parse({ basics: { url: input } }).basics?.url).toBe(expected)
+  })
+
+  it('still rejects something that is not an address at all', () => {
+    expect(profile.safeParse({ basics: { url: 'not a url' } }).success).toBe(false)
+  })
+})

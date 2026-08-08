@@ -46,6 +46,18 @@ interface Run {
 }
 
 /**
+ * Rough advance width of a run.
+ *
+ * Gaps have to be measured from where the previous run ended, not where it
+ * began, or every long title looks like it is followed by a column break. pdf.js
+ * gives a width per item but it is unreliable for subset fonts, so this
+ * approximates from the glyph count at the run's own size.
+ */
+function estimateWidth(run: Run): number {
+  return run.str.length * run.size * 0.5
+}
+
+/**
  * pdf.js 6 calls Math.sumPrecise, which is a recent proposal and missing on
  * some runtimes. It catches the failure and carries on with degraded numbers,
  * so supply it rather than let position maths quietly lose precision.
@@ -65,6 +77,17 @@ const LINE_TOLERANCE = 2.5
 /** A horizontal gap wider than this reads as a deliberate separation. */
 const COLUMN_GAP = 18
 
+/**
+ * Marks a wide gap inside a line.
+ *
+ * Resume templates right-align dates and locations against a job title on the
+ * same visual line, and that gap is the only thing separating them. Collapsing
+ * it to a space threw the boundary away, which is how "Hikvision" and its
+ * location ended up as one employer name. A tab never occurs in extracted PDF
+ * text, so it is safe to use as the marker.
+ */
+export const COLUMN_BREAK = '\t'
+
 function groupIntoLines(runs: Run[], page: number): TextLine[] {
   const rows: Run[][] = []
   for (const run of [...runs].sort((a, b) => b.y - a.y || a.x - b.x)) {
@@ -78,18 +101,20 @@ function groupIntoLines(runs: Run[], page: number): TextLine[] {
     let text = ''
     let previous: Run | undefined
     for (const run of ordered) {
-      if (previous) {
-        const gap = run.x - previous.x
-        // A wide gap is a right-aligned date or a second column, not a space.
-        // Collapsing it to one space is what makes extracted text readable.
-        const needsSpace = gap > COLUMN_GAP || !/\s$/.test(text)
-        if (needsSpace && text !== '') text += ' '
+      if (previous && text !== '') {
+        const gap = run.x - (previous.x + estimateWidth(previous))
+        if (gap > COLUMN_GAP) text += COLUMN_BREAK
+        else if (!/\s$/.test(text)) text += ' '
       }
       text += run.str
       previous = run
     }
     return {
-      text: text.replace(/\s+/g, ' ').trim(),
+      // Collapse runs of whitespace but keep column breaks intact.
+      text: text
+        .replace(/[^\S\t]+/g, ' ')
+        .replace(/ ?\t+ ?/g, COLUMN_BREAK)
+        .trim(),
       x: ordered[0].x,
       y: ordered[0].y,
       size: Math.max(...ordered.map((r) => r.size)),

@@ -7,7 +7,7 @@ describe('typography', () => {
     expect(typography.parse({})).toEqual({
       font: 'source-sans',
       size: 10.5,
-      margin: 18,
+      margin: 64,
       density: 1,
     })
   })

@@ -1,5 +1,13 @@
 import { z } from 'zod'
-import { FONT_IDS, FONT_SIZE_DEFAULT, FONT_SIZE_MAX, FONT_SIZE_MIN } from './typography'
+import {
+  FONT_IDS,
+  FONT_SIZE_DEFAULT,
+  FONT_SIZE_MAX,
+  FONT_SIZE_MIN,
+  MARGIN_DEFAULT,
+  MARGIN_MAX,
+  MARGIN_MIN,
+} from './typography'
 
 /**
  * How one document is composed from a profile.
@@ -52,8 +60,8 @@ export const typography = z.object({
   font: z.enum(FONT_IDS).default('source-sans'),
   /** Points. The template derives heading sizes and leading from this. */
   size: z.number().min(FONT_SIZE_MIN).max(FONT_SIZE_MAX).default(FONT_SIZE_DEFAULT),
-  /** Page margin in millimetres. Under 12mm reads as cramped and risks clipping. */
-  margin: z.number().min(12).max(30).default(18),
+  /** Page margin in CSS pixels; 1px is exactly 0.75pt. */
+  margin: z.number().min(MARGIN_MIN).max(MARGIN_MAX).default(MARGIN_DEFAULT),
   /** Multiplies the template's default spacing. Fills or tightens a short page. */
   density: z.number().min(0.85).max(1.25).default(1),
 })

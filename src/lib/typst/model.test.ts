@@ -16,11 +16,11 @@ describe('formatDate', () => {
 
 describe('formatRange', () => {
   it('reads an open-ended role as Present', () => {
-    expect(formatRange('2023-02', undefined)).toBe('Feb 2023 – Present')
+    expect(formatRange('2023-02', undefined)).toBe('Feb 2023 - Present')
   })
 
   it('joins a closed range', () => {
-    expect(formatRange('2021', '2023-01')).toBe('2021 – Jan 2023')
+    expect(formatRange('2021', '2023-01')).toBe('2021 - Jan 2023')
   })
 
   it('returns nothing when there are no dates at all', () => {

@@ -47,3 +47,16 @@ export const FONT_IDS = Object.keys(FONTS) as [FontId, ...FontId[]]
 export const FONT_SIZE_MIN = 9.5
 export const FONT_SIZE_MAX = 12
 export const FONT_SIZE_DEFAULT = 10.5
+
+/**
+ * Page margin in CSS pixels, the unit people already have a feel for. One px is
+ * exactly 0.75pt, so this converts to a physical size without rounding.
+ *
+ * The floor is deliberately lower than any printer can reproduce — most clip
+ * below about 20px — because it is the author's document and a screen-only PDF
+ * has no such limit.
+ */
+export const MARGIN_MIN = 0.5
+export const MARGIN_MAX = 120
+export const MARGIN_STEP = 0.5
+export const MARGIN_DEFAULT = 64
