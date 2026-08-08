@@ -29,12 +29,20 @@ function indexOf(prefix: string): number {
   return index
 }
 
+/** Anchored on structure, not on wording — where a paragraph wraps moves. */
+function headingIndex(title: string): number {
+  const index = lines.findIndex((line) => line.text.trim() === title)
+  if (index < 1) throw new Error(`No ${title} heading; the fixture changed.`)
+  return index
+}
+
 /** Baseline-to-baseline distance from the line above, in points. */
 function gapAbove(index: number): number {
   return lines[index - 1].y - lines[index].y
 }
 
-const withinParagraph = gapAbove(indexOf('owning a model from dataset'))
+// The second line of the summary, whatever it happens to say.
+const withinParagraph = gapAbove(headingIndex('SUMMARY') + 2)
 const betweenBullets = gapAbove(indexOf('• Owned the ranking service'))
 const betweenEntries = gapAbove(indexOf('Data Scientist'))
 const sectionGaps = lines
@@ -53,6 +61,21 @@ describe('vertical rhythm', () => {
     // distance from the next section's title wherever that happens.
     expect(sectionGaps).toHaveLength(HEADINGS.length)
     expect(Math.max(...sectionGaps) - Math.min(...sectionGaps)).toBeLessThan(0.5)
+  })
+
+  it('leaves the same gap below every section heading', () => {
+    // The summary sat twice as far from its rule as every other section,
+    // because the prose layout added a gap the heading already carried.
+    const below = lines
+      .map((line, index) =>
+        HEADINGS.includes(line.text.trim()) && lines[index + 1]
+          ? line.y - lines[index + 1].y
+          : null,
+      )
+      .filter((gap): gap is number => gap !== null)
+
+    expect(below).toHaveLength(HEADINGS.length)
+    expect(Math.max(...below) - Math.min(...below)).toBeLessThan(0.5)
   })
 
   it('grows each gap strictly over the one it contains', () => {

@@ -45,7 +45,7 @@
  * than to the content, so the rule reads as belonging to its own title rather
  * than floating loose above the text — but not touching the descenders.
  */
-#let gap-rule = 0.26em * d
+#let gap-rule = 0.36em * d
 
 /**
  * Section headings run one point above the body. Set at or below body size a
@@ -176,7 +176,10 @@
 #for section in data.sections [
   #section-heading(section.title)
   #if section.layout == "prose" [
-    #block(above: gap-heading, below: 0pt, section.at("body", default: ""))
+    // The heading already carries the gap below its rule, the same as it does
+    // for every other layout. Adding it again here spaced the summary twice as
+    // far from its rule as anything else on the page.
+    #block(above: 0pt, below: 0pt, section.at("body", default: ""))
   ] else if section.layout == "inline" [
     #for (i, item) in section.entries.enumerate() [#inline-entry(item, i == 0)]
   ] else if section.layout == "joined" [
