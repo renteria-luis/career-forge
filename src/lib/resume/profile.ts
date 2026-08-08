@@ -104,9 +104,29 @@ export const basics = z.object({
  * rather than one blob is what lets the template control spacing, the tailoring
  * step drop individual bullets, and the smoke detector cite a specific claim.
  */
+/**
+ * How a job was worked. Not a JSON Resume field.
+ *
+ * It is kept on the entry rather than under `extensions` because the standard
+ * sets `additionalProperties: true`, so an export carrying it is still valid
+ * for other readers — and because anything held at profile level would have to
+ * be matched back to a job by its index, which reordering entries breaks.
+ */
+export const ARRANGEMENTS = ['on-site', 'hybrid', 'remote'] as const
+export const arrangement = z.enum(ARRANGEMENTS)
+export type Arrangement = z.infer<typeof arrangement>
+
 export const work = z.object({
   name: text(),
   position: text(),
+  /**
+   * Where the job was, written however the person writes it — "Toronto",
+   * "London, ON, Canada", "Peru". One field, because splitting it into city and
+   * country asks the user to answer a question they did not ask, and every
+   * combination they might type has to survive being typed.
+   */
+  location: text(),
+  arrangement: arrangement.optional(),
   url: url(),
   startDate: date(),
   endDate: date(),
@@ -126,6 +146,8 @@ export const volunteer = z.object({
 
 export const education = z.object({
   institution: text(),
+  /** As on `work`, and ours for the same reason — the standard has no field. */
+  location: text(),
   url: url(),
   area: text(),
   studyType: text(),

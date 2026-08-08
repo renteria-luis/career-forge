@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { canSwap, toBands, type Band } from '@/lib/editor/rearrange'
 import type { LayoutBlock } from '@/lib/typst/compile'
 
@@ -15,50 +15,101 @@ import type { LayoutBlock } from '@/lib/typst/compile'
 
 export type RearrangeMode = 'sections' | 'entries'
 
+/** What is being dragged and what it is currently over. Shared by every page. */
+export interface DragState {
+  dragging: string | null
+  over: string | null
+  onGrab: (id: string) => void
+  onEnter: (id: string) => void
+  onLeave: (id: string) => void
+}
+
 export function RearrangeOverlay({
   blocks,
   pageNumber,
   pageHeights,
   mode,
-  onReorder,
+  drag,
 }: {
   blocks: LayoutBlock[]
   pageNumber: number
   /** Height of every page, in points, indexed from zero. */
   pageHeights: number[]
   mode: RearrangeMode
-  onReorder: (fromId: string, toId: string) => void
+  /**
+   * Held above this component, because a drag has to survive leaving the page
+   * it started on. One copy of this is mounted per page; with the state inside,
+   * page two's bands never saw a drag begun on page one, so an entry could only
+   * ever be moved among its own page's blocks.
+   */
+  drag: DragState
 }) {
-  const [dragging, setDragging] = useState<string | null>(null)
-  const [over, setOver] = useState<string | null>(null)
-
   const bands = toBands(blocks, pageHeights, mode === 'sections' ? 'section' : 'entry').filter(
     (band) => band.page === pageNumber,
   )
   const height = pageHeights[pageNumber - 1] ?? 1
   if (bands.length === 0) return null
 
-  const finish = () => {
-    if (dragging && over && canSwap(dragging, over)) onReorder(dragging, over)
-    setDragging(null)
-    setOver(null)
-  }
-
   return (
-    <div className="absolute inset-0" onPointerUp={finish} onPointerLeave={finish}>
+    <div className="absolute inset-0">
       {bands.map((band) => (
         <BandStrip
           key={band.id}
           band={band}
           pageHeight={height}
-          isDragging={dragging === band.id}
-          isTarget={over === band.id && dragging !== null && canSwap(dragging, band.id)}
-          onGrab={() => setDragging(band.id)}
-          onEnter={() => dragging && setOver(band.id)}
+          isDragging={drag.dragging === band.id}
+          isTarget={
+            drag.over === band.id && drag.dragging !== null && canSwap(drag.dragging, band.id)
+          }
+          onGrab={() => drag.onGrab(band.id)}
+          onEnter={() => drag.onEnter(band.id)}
+          onLeave={() => drag.onLeave(band.id)}
         />
       ))}
     </div>
   )
+}
+
+/**
+ * Runs one drag across every page.
+ *
+ * The gesture ends on a pointerup anywhere, not on leaving an overlay. Leaving
+ * used to end it, so crossing the gap between two pages cancelled the drag
+ * before it could reach anything on the far side — which is exactly the move
+ * someone makes when a resume runs to two pages.
+ */
+export function useBlockDrag(onReorder: (fromId: string, toId: string) => void): DragState {
+  const [dragging, setDragging] = useState<string | null>(null)
+  const [over, setOver] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!dragging) return
+    const finish = () => {
+      if (over && canSwap(dragging, over)) onReorder(dragging, over)
+      setDragging(null)
+      setOver(null)
+    }
+    // On the window, so a release outside the page still ends the gesture —
+    // and so crossing the gap between two pages does not end it early.
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+    return () => {
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+    }
+  }, [dragging, over, onReorder])
+
+  return {
+    dragging,
+    over,
+    onGrab: setDragging,
+    onEnter: (id) => {
+      if (dragging) setOver(id)
+    },
+    // Releasing over the gap between pages should do nothing rather than drop
+    // the block on whatever it last passed over.
+    onLeave: (id) => setOver((current) => (current === id ? null : current)),
+  }
 }
 
 function BandStrip({
@@ -68,6 +119,7 @@ function BandStrip({
   isTarget,
   onGrab,
   onEnter,
+  onLeave,
 }: {
   band: Band
   pageHeight: number
@@ -75,6 +127,7 @@ function BandStrip({
   isTarget: boolean
   onGrab: () => void
   onEnter: () => void
+  onLeave: () => void
 }) {
   const label = band.id.startsWith('section:') ? band.id.slice('section:'.length) : band.id
 
@@ -88,6 +141,7 @@ function BandStrip({
         onGrab()
       }}
       onPointerEnter={onEnter}
+      onPointerLeave={onLeave}
       style={{
         top: `${(band.top / pageHeight) * 100}%`,
         height: `${((band.bottom - band.top) / pageHeight) * 100}%`,

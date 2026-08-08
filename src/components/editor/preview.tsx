@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { loadPdfjs } from '@/lib/parse/pdfjs'
 import type { CompiledPdf } from '@/lib/editor/use-compiled-pdf'
-import { RearrangeOverlay, type RearrangeMode } from './rearrange-overlay'
+import { RearrangeOverlay, useBlockDrag, type RearrangeMode } from './rearrange-overlay'
 
 /**
  * Draws the compiled resume.
@@ -48,6 +48,8 @@ export function Preview({
   const containerRef = useRef<HTMLDivElement>(null)
   const [pages, setPages] = useState<RenderedPage[]>([])
   const [width, setWidth] = useState(0)
+  // One drag, shared by every page, so a block can be dropped on the other one.
+  const drag = useBlockDrag(onReorder ?? (() => {}))
 
   useEffect(() => {
     const element = containerRef.current
@@ -139,7 +141,7 @@ export function Preview({
                   pageNumber={index + 1}
                   pageHeights={pages.map((page) => page.heightPt)}
                   mode={rearrange}
-                  onReorder={onReorder}
+                  drag={drag}
                 />
               ) : null
             }

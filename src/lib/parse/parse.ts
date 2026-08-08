@@ -1,6 +1,8 @@
 import type { StandardSectionId } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { parseDateRange, type DateRange } from './dates'
+import { splitEmployer } from './employment'
+import { splitKeywords } from '@/lib/resume/keywords'
 import { COLUMN_BREAK, type ExtractedDocument, type TextLine } from './extract'
 import { findPlace } from './location'
 import { bodyTextSize, detectSections } from './sections'
@@ -56,13 +58,6 @@ const LABEL_MAX_CHARS = 40
 
 /** Longest an employer or institution name realistically runs. */
 const NAME_MAX_CHARS = 60
-
-function splitKeywords(text: string): string[] {
-  return text
-    .split(/[,;·|]/)
-    .map((keyword) => keyword.trim())
-    .filter(Boolean)
-}
 
 /**
  * How much further right a line must sit to count as a wrapped continuation
@@ -518,7 +513,11 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
 
   switch (id) {
     case 'work':
-      profile.work = entries.map((e, i) => ({ position: e.title, name: e.subtitle, ...dated[i] }))
+      profile.work = entries.map((e, i) => {
+        // The employer line carries where the job was and how it was worked.
+        const { name, location, arrangement } = splitEmployer(e.subtitle)
+        return { position: e.title, name, location, arrangement, ...dated[i] }
+      })
       break
     case 'volunteer':
       profile.volunteer = entries.map((e, i) => ({
@@ -528,17 +527,22 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
       }))
       break
     case 'education':
-      profile.education = entries.map((e, i) => ({
-        area: e.title,
-        institution: e.subtitle,
-        startDate: dated[i].startDate,
-        endDate: dated[i].endDate,
-        // GPA, honours and coursework sit under a degree the way achievements
-        // sit under a job. Written as bullets they arrive as bullets; written as
-        // a paragraph they are still details, not a description of the degree.
-        courses: dated[i].highlights ?? (dated[i].summary ? [dated[i].summary] : undefined),
-        url: e.url,
-      }))
+      profile.education = entries.map((e, i) => {
+        // Same line, same split — "Fanshawe College | London, ON".
+        const { name, location } = splitEmployer(e.subtitle)
+        return {
+          area: e.title,
+          institution: name,
+          location,
+          startDate: dated[i].startDate,
+          endDate: dated[i].endDate,
+          // GPA, honours and coursework sit under a degree the way achievements
+          // sit under a job. Written as bullets they arrive as bullets; written as
+          // a paragraph they are still details, not a description of the degree.
+          courses: dated[i].highlights ?? (dated[i].summary ? [dated[i].summary] : undefined),
+          url: e.url,
+        }
+      })
       break
     case 'projects':
       profile.projects = entries.map((e, i) => ({

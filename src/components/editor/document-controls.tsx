@@ -62,7 +62,11 @@ export function DocumentControls({
 
   return (
     <div className="flex flex-col">
-      <FormSection title="Sections" count={document.sections.filter((s) => s.visible).length}>
+      <FormSection
+        title="Sections"
+        unit="section"
+        count={document.sections.filter((s) => s.visible).length}
+      >
         <ul className="flex flex-col">
           {document.sections.map((section, index) => (
             <li

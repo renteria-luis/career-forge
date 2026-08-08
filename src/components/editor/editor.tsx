@@ -354,13 +354,17 @@ export function Editor() {
         {/* Both panes take an equal share and centre their own content, so the
             page and the form sit symmetrically instead of one hugging an edge. */}
         <section
-          className={`bg-surface-sunk relative min-h-0 flex-1 ${
-            showPreview ? '' : 'hidden lg:block'
+          className={`bg-surface-sunk relative min-h-0 flex-1 flex-col ${
+            showPreview ? 'flex' : 'hidden lg:flex'
           }`}
           aria-label="Preview"
         >
           {draggingFile && <DropTarget />}
-          <div className="absolute inset-0 overflow-y-auto p-4 sm:p-6">
+          {/* Outside the scrolling element rather than stuck to it. Sticky
+              would leave the pages sliding under a transparent strip that has
+              to be given a background and the pane's padding back; this simply
+              is not in the part that scrolls. */}
+          <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
             <div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -405,6 +409,10 @@ export function Editor() {
                   Drag a block onto another to swap their order. Relevance is not always chronology.
                 </p>
               )}
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-4 sm:px-6 sm:pb-6">
+            <div className="mx-auto w-full max-w-[680px]">
               <Preview
                 compiled={compiled}
                 onSelectField={focusField}

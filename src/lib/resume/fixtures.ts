@@ -23,6 +23,8 @@ export const sampleProfile: Profile = {
     {
       name: 'Nomad Analytics',
       position: 'Senior ML Engineer',
+      location: 'Toronto, ON',
+      arrangement: 'remote',
       startDate: '2023-02',
       // No endDate: this is the current role, per the JSON Resume convention.
       highlights: [
@@ -47,6 +49,7 @@ export const sampleProfile: Profile = {
   education: [
     {
       institution: 'Universidad Nacional de Ingeniería',
+      location: 'Lima, Peru',
       area: 'Computer Science',
       studyType: 'BSc',
       startDate: '2016',

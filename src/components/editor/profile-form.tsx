@@ -6,8 +6,10 @@ import { formBlockTitle, formBlocks, type FormBlockId } from '@/lib/editor/form-
 import type { DocumentSection } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { EntryCard, FormSection } from './entry-card'
-import { Button, Field, TextArea } from './fields'
+import { Button, Field, Select, TextArea } from './fields'
 import { toHandle, toUrl } from '@/lib/editor/profile-links'
+import { ARRANGEMENTS, ARRANGEMENT_LABELS } from '@/lib/resume/arrangements'
+import { KeywordInput } from './keyword-input'
 import { OptionalField } from './optional-field'
 
 /**
@@ -66,7 +68,7 @@ function LineList({
   )
 }
 
-/** Comma-separated values in one input, which is how people type a list. */
+/** Keywords as removable chips. See KeywordInput for why not one text field. */
 function KeywordField({
   form,
   name,
@@ -85,21 +87,14 @@ function KeywordField({
       control={form.control}
       name={name}
       render={({ field }) => (
-        <Field
+        <KeywordInput
           label={label}
           hint={hint}
           placeholder={placeholder}
           name={field.name}
-          ref={field.ref}
-          value={(field.value ?? []).join(', ')}
-          onChange={(event) =>
-            field.onChange(
-              event.target.value
-                .split(',')
-                .map((keyword) => keyword.trim())
-                .filter(Boolean),
-            )
-          }
+          inputRef={field.ref}
+          values={field.value ?? []}
+          onChange={field.onChange}
         />
       )}
     />
@@ -212,6 +207,28 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                       {...register(`work.${index}.endDate`)}
                     />
                   </div>
+                  {/* One field, however the place is written. Asking for a city
+                      and a country separately makes everyone whose address is
+                      neither shape answer a question that does not fit. */}
+                  <Field
+                    label="Location"
+                    hint="However you write it — a city, a country, or both."
+                    placeholder="Toronto, ON, Canada"
+                    {...register(`work.${index}.location`)}
+                  />
+                  <OptionalField
+                    label="Add how you worked"
+                    hasValue={Boolean(form.watch(`work.${index}.arrangement`))}
+                  >
+                    <Select label="How you worked" {...register(`work.${index}.arrangement`)}>
+                      <option value="">Not saying</option>
+                      {ARRANGEMENTS.map((id) => (
+                        <option key={id} value={id}>
+                          {ARRANGEMENT_LABELS[id]}
+                        </option>
+                      ))}
+                    </Select>
+                  </OptionalField>
                   <LineList
                     form={form}
                     name={`work.${index}.highlights`}
@@ -292,8 +309,8 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   <LineList
                     form={form}
                     name={`projects.${index}.highlights`}
-                    label="Worth pointing out"
-                    hint="One per line."
+                    label="What you did and what came of it"
+                    hint="One per line. Lead with the outcome and put a number on it."
                   />
                 </EntryCard>
               ))}
@@ -318,9 +335,9 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   <Field label="Institution" {...register(`education.${index}.institution`)} />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field
-                      label="Qualification"
-                      placeholder="BSc"
-                      {...register(`education.${index}.studyType`)}
+                      label="Location"
+                      placeholder="London, ON, Canada"
+                      {...register(`education.${index}.location`)}
                     />
                     <Field
                       label="Field"
@@ -340,6 +357,16 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                       {...register(`education.${index}.endDate`)}
                     />
                   </div>
+                  <OptionalField
+                    label="Add qualification"
+                    hasValue={Boolean(form.watch(`education.${index}.studyType`))}
+                  >
+                    <Field
+                      label="Qualification"
+                      placeholder="BSc"
+                      {...register(`education.${index}.studyType`)}
+                    />
+                  </OptionalField>
                   <OptionalField
                     label="Add details"
                     hasValue={(form.watch(`education.${index}.courses`) ?? []).length > 0}

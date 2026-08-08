@@ -125,6 +125,125 @@ test.describe('editing', () => {
     await expect(projects.getByLabel('Started')).toHaveCount(0)
   })
 
+  test('a keyword can be typed, added and taken back out', async ({ page }) => {
+    // The old field was controlled by the array and rebuilt the text on every
+    // keystroke, so a space or a comma at the end was deleted as it was typed
+    // and the caret jumped to the end. Nothing here reformats what is committed.
+    await page.goto('/editor')
+    const skills = page.locator('#section-skills')
+    await skills.getByRole('button', { name: 'Add a group' }).click()
+    const input = skills.getByLabel('Skills', { exact: true })
+
+    await input.fill('Python')
+    await input.press('Enter')
+    await input.fill('Pandas')
+    await skills.getByRole('button', { name: 'Add', exact: true }).click()
+
+    await expect(skills.getByRole('button', { name: 'Remove Python' })).toBeVisible()
+    await expect(skills.getByRole('button', { name: 'Remove Pandas' })).toBeVisible()
+    // The line is clear again, so the next one can just be typed.
+    await expect(input).toHaveValue('')
+
+    await skills.getByRole('button', { name: 'Remove Python' }).click()
+    await expect(skills.getByRole('button', { name: 'Remove Python' })).toBeHidden()
+    await expect(skills.getByRole('button', { name: 'Remove Pandas' })).toBeVisible()
+  })
+
+  test('a comma separates keywords as they are typed', async ({ page }) => {
+    await page.goto('/editor')
+    const skills = page.locator('#section-skills')
+    await skills.getByRole('button', { name: 'Add a group' }).click()
+    // Typed or pasted, the comma is how people say "that was one of them".
+    await skills.getByLabel('Skills', { exact: true }).fill('Python, Pandas, SQL')
+    for (const keyword of ['Python', 'Pandas', 'SQL']) {
+      await expect(skills.getByRole('button', { name: `Remove ${keyword}` })).toBeVisible()
+    }
+  })
+
+  test('a bracketed skill stays one skill', async ({ page }) => {
+    // "Python (Pandas, Pydantic, Regex)" is one skill written with its parts.
+    // Split on every comma it becomes "Python (Pandas" and "Regex)".
+    await page.goto('/editor')
+    const skills = page.locator('#section-skills')
+    await skills.getByRole('button', { name: 'Add a group' }).click()
+    const input = skills.getByLabel('Skills', { exact: true })
+
+    await input.fill('Python (Pandas, Pydantic, Regex)')
+    await input.press('Enter')
+    await expect(
+      skills.getByRole('button', { name: 'Remove Python (Pandas, Pydantic, Regex)' }),
+    ).toBeVisible()
+
+    // A separator after the closing bracket ends it as usual.
+    await input.fill('SQL (Postgres), Go')
+    await expect(skills.getByRole('button', { name: 'Remove SQL (Postgres)' })).toBeVisible()
+    await expect(skills.getByRole('button', { name: 'Remove Go' })).toBeVisible()
+  })
+
+  test('skills can be put in a different order', async ({ page }) => {
+    // The page prints them in this order, so this is the order that matters.
+    await page.goto('/editor')
+    const skills = page.locator('#section-skills')
+    await skills.getByRole('button', { name: 'Add a group' }).click()
+    await skills.getByLabel('Skills', { exact: true }).fill('Python, Pandas, SQL')
+
+    const list = skills.getByRole('list', { name: /^Skills/ })
+    const order = () =>
+      list
+        .locator('li')
+        .evaluateAll((items) => items.map((item) => item.textContent?.replace('×', '').trim()))
+    expect(await order()).toEqual(['Python', 'Pandas', 'SQL'])
+
+    // Dragging is the quick way.
+    await list.locator('li').nth(2).dragTo(list.locator('li').nth(0))
+    expect(await order()).toEqual(['SQL', 'Python', 'Pandas'])
+
+    // The arrow keys are the way that works without a pointer, and both go
+    // through the same move — the reason entries are reordered with buttons.
+    const python = skills.getByRole('button', { name: 'Python. Use the arrow keys to move it.' })
+    await python.focus()
+    await python.press('ArrowLeft')
+    expect(await order()).toEqual(['Python', 'SQL', 'Pandas'])
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+  })
+
+  test('a job can say where it was and how it was worked', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page.getByLabel('Role').first().fill('Engineer')
+    await page.getByLabel('Location').first().fill('Toronto, ON')
+    // Behind a button, because most people will not say.
+    await page.getByRole('button', { name: 'Add how you worked' }).first().click()
+    await page.getByLabel('How you worked').first().selectOption('remote')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await expect(page.getByLabel('Location').first()).toHaveValue('Toronto, ON')
+  })
+
+  test('a qualification is asked for only when it is wanted', async ({ page }) => {
+    await page.goto('/editor')
+    const education = page.locator('#section-education')
+    await expect(education.getByRole('button', { name: 'Add qualification' })).toBeVisible()
+    await expect(education.getByLabel('Qualification')).toHaveCount(0)
+    await education.getByRole('button', { name: 'Add qualification' }).click()
+    await education.getByLabel('Qualification').fill('BSc')
+    await expect(education.getByLabel('Qualification')).toHaveValue('BSc')
+  })
+
+  test('an entry folds away and its section counts in words', async ({ page }) => {
+    await page.goto('/editor')
+    const work = page.locator('#section-experience')
+    await expect(work.locator('summary').first()).toContainText('1 entry')
+
+    await page.getByRole('button', { name: 'Add a role' }).click()
+    await expect(work.locator('summary').first()).toContainText('2 entries')
+
+    // Folding an entry hides its fields; removing one must not fold it.
+    const first = work.locator('details').first()
+    await expect(first.getByLabel('Role')).toBeVisible()
+    await first.locator('summary').first().click()
+    await expect(first.getByLabel('Role')).toBeHidden()
+  })
+
   test('a bad date is reported on the field and not swallowed', async ({ page }) => {
     await page.goto('/editor')
     const started = page.getByLabel('Started').first()
@@ -379,6 +498,101 @@ test.describe('rearranging on the page', () => {
       'section-education',
       'section-skills',
     ])
+  })
+
+  test('an entry can be dragged onto one on the other page', async ({ page }, testInfo) => {
+    // Each page had its own copy of the overlay holding its own drag state, and
+    // that copy ended the drag when the pointer left it — so crossing the gap
+    // between two pages cancelled the gesture, and a block could only ever be
+    // moved among the ones sharing its page.
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page.getByLabel('Role').first().fill('Recent Job')
+    await page
+      .getByLabel('What you did')
+      .first()
+      .fill(
+        Array.from({ length: 80 }, (_, i) => `A bullet long enough to fill a line, ${i}`).join(
+          '\n',
+        ),
+      )
+    await page.getByRole('button', { name: 'Add a role' }).click()
+    await page.getByLabel('Role').nth(1).fill('Older Job')
+    // Two pages is the whole point of the test.
+    await expect(page.locator('canvas').nth(1)).toBeVisible({ timeout: 20_000 })
+
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    const bands = page.locator('[aria-label^="Move work."]')
+    await expect(bands.first()).toBeVisible({ timeout: 15_000 })
+
+    // The two blocks sit on different pages, so there is one scroll position
+    // where each has a usable slice on screen. Find it rather than assume it.
+    const scroller = page.getByLabel('Preview').locator('.overflow-y-auto')
+    const measure = () =>
+      bands.evaluateAll((els) =>
+        els.map((el) => {
+          const box = el.getBoundingClientRect()
+          return {
+            id: el.getAttribute('aria-label'),
+            x: box.x + box.width / 2,
+            top: Math.max(box.top, 150),
+            bottom: Math.min(box.bottom, window.innerHeight - 20),
+          }
+        }),
+      )
+
+    let placed: Awaited<ReturnType<typeof measure>> = []
+    for (const offset of [700, 800, 900, 600, 1000, 500]) {
+      await scroller.evaluate((el, top) => el.scrollTo(0, top), offset)
+      const boxes = await measure()
+      if (boxes.length === 2 && boxes.every((b) => b.bottom - b.top > 40)) {
+        placed = boxes
+        break
+      }
+    }
+    const from = placed.find((b) => b.id === 'Move work.1')
+    const to = placed.find((b) => b.id === 'Move work.0')
+    if (!from || !to) throw new Error('The two blocks were never both on screen.')
+    const middle = (b: { top: number; bottom: number }) => (b.top + b.bottom) / 2
+
+    await page.mouse.move(from.x, middle(from))
+    await page.mouse.down()
+    // Through the gap between the pages, which is what used to end the drag.
+    await page.mouse.move(from.x, (middle(from) + middle(to)) / 2, { steps: 12 })
+    await page.mouse.move(to.x, middle(to), { steps: 12 })
+    await page.mouse.up()
+
+    await expect(page.getByLabel('Role').first()).toHaveValue('Older Job', { timeout: 15_000 })
+  })
+
+  test('the preview toolbar stays put while the pages scroll', async ({ page }) => {
+    // Reachable from page three: changing the paper or starting a rearrange
+    // should not mean scrolling back to the top first.
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page
+      .getByLabel('What you did')
+      .first()
+      .fill(
+        Array.from({ length: 80 }, (_, i) => `A bullet long enough to fill a line, ${i}`).join(
+          '\n',
+        ),
+      )
+    if (await page.getByRole('button', { name: 'See the preview' }).isVisible()) {
+      await page.getByRole('button', { name: 'See the preview' }).click()
+    }
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 20_000 })
+
+    const rearrange = page.getByRole('button', { name: 'Rearrange' })
+    const before = await rearrange.boundingBox()
+    const scroller = page.getByLabel('Preview').locator('.overflow-y-auto')
+    await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(200)
+
+    const after = await rearrange.boundingBox()
+    expect(before && after && Math.round(after.y)).toBe(before && Math.round(before.y))
+    await expect(rearrange).toBeInViewport()
   })
 
   test('the paper size follows the toolbar', async ({ page }) => {
