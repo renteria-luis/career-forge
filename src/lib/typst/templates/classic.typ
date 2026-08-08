@@ -36,8 +36,15 @@
 #let leading = 0.62em * d
 /** Between paragraphs and between bullets inside one entry. */
 #let gap-paragraph = 0.72em * d
-/** Between one entry and the next within a section. */
-#let gap-entry = 1em * d
+/**
+ * Between one entry and the next within a section — one job to the next, one
+ * project to the next.
+ *
+ * The lines inside an entry (name to stack, stack to link, role to employer)
+ * are all separated by `leading` and are therefore already identical to each
+ * other. Changing one of them would break that.
+ */
+#let gap-entry = 0.9em * d
 /** Between a section heading and the first line under it. */
 #let gap-heading = 0.62em * d
 /**
@@ -53,7 +60,7 @@
  */
 #let heading-size = (page-opts.size + 1) * 1pt
 /** Between the last line of a section and the next section's heading. */
-#let gap-section = 1.4em * d
+#let gap-section = 1.3em * d
 
 #set document(title: data.name + " — Resume", author: data.name)
 
