@@ -1,8 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
+import { loadDraft, saveDraft, type Draft } from '@/lib/editor/draft'
+import { buildFieldIndex, findField } from '@/lib/editor/field-index'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { emptyDocument, emptyProfile } from '@/lib/editor/starter'
 import type { ResumeDocument } from '@/lib/resume/document'
@@ -12,17 +14,24 @@ import { DocumentControls } from './document-controls'
 import { Button } from './fields'
 import { ImportReport } from './import-report'
 import { Preview } from './preview'
-import { ProfileForm } from './profile-form'
+import { ProfileForm, formBlockTitles } from './profile-form'
+import { SectionIndex } from './section-index'
 
 type Pane = 'content' | 'layout'
 
 export function Editor() {
+  // Read once, during the first render. This component is loaded client-only,
+  // so there is no server-rendered markup for a restored draft to disagree with.
+  const [restored] = useState(loadDraft)
+
   const form = useForm<Profile>({
-    defaultValues: emptyProfile(),
+    defaultValues: restored?.profile ?? emptyProfile(),
     resolver: standardSchemaResolver(profileSchema),
     mode: 'onBlur',
   })
-  const [document, setDocument] = useState<ResumeDocument>(emptyDocument)
+  const [document, setDocument] = useState<ResumeDocument>(
+    () => restored?.document ?? emptyDocument(),
+  )
   const [pane, setPane] = useState<Pane>('content')
   const [showPreview, setShowPreview] = useState(false)
   const [report, setReport] = useState<ParseReport | null>(null)
@@ -35,6 +44,25 @@ export function Editor() {
   // The server revalidates everything, so a partial mid-edit value is fine.
   const values = useWatch({ control: form.control, defaultValue: form.getValues() }) as Profile
   const compiled = useCompiledPdf(values, document)
+
+  // Written on a delay so a burst of typing is one write, not one per keystroke.
+  const draft = JSON.stringify({ profile: values, document })
+  const latestDraft = useRef(draft)
+
+  useEffect(() => {
+    latestDraft.current = draft
+    const timer = setTimeout(() => saveDraft(JSON.parse(draft) as Draft), 400)
+    return () => clearTimeout(timer)
+  }, [draft])
+
+  useEffect(() => {
+    // The delay above means a refresh a moment after typing would lose the last
+    // edit. pagehide fires on reload, navigation and closing a tab, and is the
+    // one event mobile browsers reliably deliver before discarding a page.
+    const flush = () => saveDraft(JSON.parse(latestDraft.current) as Draft)
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [])
 
   async function importResume(file: File) {
     setImporting(true)
@@ -54,10 +82,75 @@ export function Editor() {
       // from whatever was there before the import.
       form.reset(result.profile)
       setReport(result.report)
+      // An imported resume arrives at whatever length it already was, and
+      // telling someone their own resume is too long the moment they open it is
+      // a warning about nothing they did.
+      //
+      // What matters is how long it comes out here, not how long the file was:
+      // the same content typeset differently can gain or lose a page. So the
+      // document is compiled once to find out, rather than reacting to the
+      // preview's own compile from inside an effect.
+      const pages = await compiledPageCount(result.profile, document)
+      if (pages > document.options.maxPages) {
+        setDocument((current) => ({
+          ...current,
+          options: { ...current.options, maxPages: Math.min(pages, 10) },
+        }))
+      }
     } catch {
       setImportError('That file could not be read.')
     } finally {
       setImporting(false)
+    }
+  }
+
+  /**
+   * Opens the field a line of the preview came from.
+   *
+   * The preview is a picture of the finished document, so finding the thing you
+   * want to change means scrolling the form hunting for it. Clicking the line
+   * itself is the shorter route, and the text is enough to identify the field.
+   */
+  function focusField(clicked: string) {
+    const path = findField(buildFieldIndex(values), clicked)
+    if (!path) return
+
+    setPane('content')
+    // On a phone the form is the other view, so it has to come back first.
+    setShowPreview(false)
+
+    // Waits a frame: the pane may have just been unhidden, and an element that
+    // is still display:none cannot be scrolled to or focused.
+    requestAnimationFrame(() => {
+      const field = window.document.querySelector<HTMLElement>(`[name="${CSS.escape(path)}"]`)
+      if (!field) return
+
+      // A collapsed section cannot be scrolled to or focused, and the user has
+      // no way to know which one to open. Open every ancestor on the way down.
+      for (
+        let group = field.closest('details');
+        group;
+        group = group.parentElement?.closest('details') ?? null
+      ) {
+        group.open = true
+      }
+
+      field.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      field.focus({ preventScroll: true })
+    })
+  }
+
+  /** Compiles once to find out how many pages the document runs to. */
+  async function compiledPageCount(next: Profile, doc: ResumeDocument): Promise<number> {
+    try {
+      const response = await fetch('/api/compile', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ profile: next, document: doc }),
+      })
+      return response.ok ? Number(response.headers.get('x-page-count') ?? 1) : 1
+    } catch {
+      return 1
     }
   }
 
@@ -78,7 +171,7 @@ export function Editor() {
     // the preview is what this replaces, and it needs no measured offsets.
     <div className="flex h-dvh flex-col">
       <header className="border-hairline bg-surface z-10 shrink-0 border-b">
-        <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <p className="font-display text-title text-strong mr-auto">Career Forge</p>
 
           <input
@@ -100,59 +193,66 @@ export function Editor() {
           </Button>
         </div>
 
-        <div className="border-hairline mx-auto flex w-full max-w-[1600px] items-center gap-3 border-t px-4 py-1.5 sm:px-6">
+        <div className="border-hairline flex w-full items-center gap-3 border-t px-4 py-1.5 sm:px-6">
           <BuildStatus compiled={compiled} />
         </div>
       </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col lg:flex-row">
+      {/* Full bleed: a centred container leaves dead strips at the window edge
+          where the wheel does nothing, and the edge is where a pointer lands. */}
+      <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
         <section
-          className={`min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:max-w-xl ${
-            showPreview ? 'hidden lg:block' : ''
-          }`}
+          className={`min-h-0 flex-1 overflow-y-auto ${showPreview ? 'hidden lg:block' : ''}`}
           aria-label="Resume content"
         >
-          <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
-            {(['content', 'layout'] as const).map((id) => (
-              <button
-                key={id}
-                role="tab"
-                type="button"
-                aria-selected={pane === id}
-                onClick={() => setPane(id)}
-                className={`text-small -mb-px border-b-2 px-3 py-2 font-medium capitalize transition-colors ${
-                  pane === id
-                    ? 'border-accent text-accent'
-                    : 'text-muted hover:text-strong border-transparent'
-                }`}
-              >
-                {id}
-              </button>
-            ))}
+          <div className="mx-auto flex w-full max-w-3xl gap-5 px-4 py-6 sm:px-6">
+            <div className="min-w-0 flex-1">
+              <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
+                {(['content', 'layout'] as const).map((id) => (
+                  <button
+                    key={id}
+                    role="tab"
+                    type="button"
+                    aria-selected={pane === id}
+                    onClick={() => setPane(id)}
+                    className={`text-small -mb-px border-b-2 px-3 py-2 font-medium capitalize transition-colors ${
+                      pane === id
+                        ? 'border-accent text-accent'
+                        : 'text-muted hover:text-strong border-transparent'
+                    }`}
+                  >
+                    {id}
+                  </button>
+                ))}
+              </div>
+
+              {importError && (
+                <p className="border-flag/40 bg-flag-sunk text-flag rounded-edge text-small mb-4 border px-3 py-2">
+                  {importError}
+                </p>
+              )}
+              {report && <ImportReport report={report} onDismiss={() => setReport(null)} />}
+
+              {pane === 'content' ? (
+                <ProfileForm form={form} sections={document.sections} />
+              ) : (
+                <DocumentControls document={document} onChange={setDocument} />
+              )}
+            </div>
+            {pane === 'content' && <SectionIndex titles={formBlockTitles(document.sections)} />}
           </div>
-
-          {importError && (
-            <p className="border-flag/40 bg-flag-sunk text-flag rounded-edge text-small mb-4 border px-3 py-2">
-              {importError}
-            </p>
-          )}
-          {report && <ImportReport report={report} onDismiss={() => setReport(null)} />}
-
-          {pane === 'content' ? (
-            <ProfileForm form={form} />
-          ) : (
-            <DocumentControls document={document} onChange={setDocument} />
-          )}
         </section>
 
+        {/* Both panes take an equal share and centre their own content, so the
+            page and the form sit symmetrically instead of one hugging an edge. */}
         <section
           className={`bg-surface-sunk min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${
             showPreview ? '' : 'hidden lg:block'
           }`}
           aria-label="Preview"
         >
-          <div className="mx-auto max-w-2xl">
-            <Preview compiled={compiled} />
+          <div className="mx-auto w-full max-w-[680px]">
+            <Preview compiled={compiled} onSelectField={focusField} />
           </div>
         </section>
       </div>

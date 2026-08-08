@@ -2,6 +2,7 @@ import type { StandardSectionId } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { parseDateRange, type DateRange } from './dates'
 import { COLUMN_BREAK, type ExtractedDocument, type TextLine } from './extract'
+import { findPlace } from './location'
 import { bodyTextSize, detectSections } from './sections'
 
 /**
@@ -47,6 +48,16 @@ const URL = new RegExp(
 // Loose on purpose: phone formats vary by country far more than resumes do.
 const PHONE = /(?:\+?\d[\d\s().-]{7,}\d)/
 const BULLET = /^[•\-*‣▪·—–]\s*/
+
+/** Past this, a colon is punctuation in a sentence rather than a field label. */
+const LABEL_MAX_CHARS = 40
+
+function splitKeywords(text: string): string[] {
+  return text
+    .split(/[,;·|]/)
+    .map((keyword) => keyword.trim())
+    .filter(Boolean)
+}
 
 /**
  * How much further right a line must sit to count as a wrapped continuation
@@ -117,6 +128,15 @@ interface RawEntry {
   endDate?: string
   summary?: string
   highlights: string[]
+  /** A line under the entry that is nothing but an address. */
+  url?: string
+}
+
+/** True when a line is an address and nothing else. */
+function isBareUrl(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed === '' || /\s/.test(trimmed)) return false
+  return new RegExp(`^(?:${URL.source})$`, 'i').test(trimmed)
 }
 
 /**
@@ -148,6 +168,13 @@ function groupEntries(lines: TextLine[], bodySize: number): RawEntry[] {
       if (!current) current = { highlights: [] }
       if (highlight) current.highlights.push(highlight)
       bulletX = line.x
+      continue
+    }
+
+    // Projects and portfolios put a repository address on its own line under
+    // the title. It is a field, not a sentence, so it must not land in prose.
+    if (current && !current.url && isBareUrl(text)) {
+      current.url = /^https?:/i.test(text.trim()) ? text.trim() : `https://${text.trim()}`
       continue
     }
 
@@ -198,25 +225,47 @@ interface KeywordItem {
 
 /** Sections that are really a list, not a set of dated entries. */
 function toKeywordList(lines: TextLine[]): KeywordItem[] {
-  return lines.flatMap<KeywordItem>((line) => {
+  const items: KeywordItem[] = []
+  /** True when the last item came from a "Label: a, b, c" line. */
+  let labelled = false
+
+  for (const line of lines) {
     const text = flatten(line.text.replace(BULLET, ''))
-    if (text === '') return []
+    if (text === '') continue
+
     const colon = text.indexOf(':')
-    if (colon > 0 && colon < 40) {
-      const keywords = text
-        .slice(colon + 1)
-        .split(/[,;·|]/)
-        .map((k) => k.trim())
-        .filter(Boolean)
-      return [{ name: text.slice(0, colon).trim(), keywords }]
+    const hasLabel = colon > 0 && colon < LABEL_MAX_CHARS
+
+    /**
+     * A skills line that runs past the width of the page wraps with no marker
+     * and no indent, so position says nothing about it. What does say something
+     * is weight: the label that opens the line is bold and the wrap is not.
+     *
+     * Without this the tail of a long skill group becomes a group of its own
+     * with an empty name, which is exactly how it looked in the form.
+     */
+    if (!hasLabel && !line.bold && labelled && items.length > 0) {
+      const last = items[items.length - 1]
+      last.keywords = [...(last.keywords ?? []), ...splitKeywords(text)]
+      continue
     }
+
+    if (hasLabel) {
+      items.push({
+        name: text.slice(0, colon).trim(),
+        keywords: splitKeywords(text.slice(colon + 1)),
+      })
+      labelled = true
+      continue
+    }
+
     // No label, so the whole line is a list of skills.
-    const keywords = text
-      .split(/[,;·|]/)
-      .map((k) => k.trim())
-      .filter(Boolean)
-    return keywords.length > 1 ? [{ keywords }] : [{ name: text }]
-  })
+    const keywords = splitKeywords(text)
+    items.push(keywords.length > 1 ? { keywords } : { name: text })
+    labelled = false
+  }
+
+  return items
 }
 
 function parseHeader(lines: TextLine[]): {
@@ -258,6 +307,16 @@ function parseHeader(lines: TextLine[]): {
   }
   if (profiles.length > 0) basics.profiles = profiles
   if (profiles.length > 0 || basics.url) found.add('links')
+
+  // Location sits in the same run of details as the phone and the email.
+  const segments = lines.flatMap((line) =>
+    line.text.split(COLUMN_BREAK).flatMap((part) => part.split(/[|·•]/)),
+  )
+  const place = findPlace(segments)
+  if (place) {
+    basics.location = place
+    found.add('location')
+  }
 
   // The name is the first line that is not a contact detail. Resumes put it
   // first almost without exception, and size alone misfires on wordmark logos.
@@ -376,15 +435,24 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
         institution: e.subtitle,
         startDate: dated[i].startDate,
         endDate: dated[i].endDate,
+        // GPA, honours and coursework sit under a degree the way achievements
+        // sit under a job, so they arrive as the entry's bullets.
+        courses: dated[i].highlights,
+        url: e.url,
       }))
       break
     case 'projects':
       profile.projects = entries.map((e, i) => ({
         name: e.title,
-        description: e.subtitle ?? dated[i].summary,
+        // "Pipeline | Python, Pandas, SQL" puts the stack after a pipe on the
+        // title line. Read as a description it becomes a sentence that is not
+        // one; read as keywords it is what it actually is.
+        keywords: e.subtitle ? splitKeywords(e.subtitle) : undefined,
+        description: dated[i].summary,
         highlights: dated[i].highlights,
         startDate: dated[i].startDate,
         endDate: dated[i].endDate,
+        url: e.url,
       }))
       break
     case 'certificates':

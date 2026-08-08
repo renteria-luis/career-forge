@@ -56,6 +56,11 @@ export function EntryCard({
   )
 }
 
+/** Turns a section title into the id the index links to. */
+export function sectionAnchor(title: string): string {
+  return `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+}
+
 /** A collapsible group of fields. Collapsed by default keeps the form scannable. */
 export function FormSection({
   title,
@@ -67,7 +72,11 @@ export function FormSection({
   children: ReactNode
 }) {
   return (
-    <details open className="border-hairline group border-b pb-6">
+    <details
+      open
+      id={sectionAnchor(title)}
+      className="border-hairline group scroll-mt-4 border-b pb-6"
+    >
       <summary className="text-strong flex cursor-pointer list-none items-center justify-between gap-2 py-4">
         <span className="font-display text-title">{title}</span>
         <span className="text-muted text-micro font-mono">

@@ -5,7 +5,7 @@ import { documentSection, resumeDocument, typography } from './document'
 describe('typography', () => {
   it('fills in defaults for an empty object', () => {
     expect(typography.parse({})).toEqual({
-      font: 'source-sans',
+      font: 'carlito',
       size: 10.5,
       margin: 64,
       density: 1,
@@ -26,7 +26,7 @@ describe('typography', () => {
 describe('resumeDocument', () => {
   it('resolves nested defaults from a bare document', () => {
     const doc = resumeDocument.parse({ id: 'd1' })
-    expect(doc.typography.font).toBe('source-sans')
+    expect(doc.typography.font).toBe('carlito')
     expect(doc.options.maxPages).toBe(1)
     expect(doc.sections).toEqual([])
   })

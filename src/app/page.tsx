@@ -66,8 +66,9 @@ export default function HomePage() {
       </ol>
 
       <p className="text-muted max-w-measure text-small mt-20">
-        Nothing you type is stored. There is no account yet, and an imported PDF is read in memory
-        and dropped when the request finishes.{' '}
+        Nothing you type reaches a server beyond compiling it. There is no account yet: your draft
+        is kept in your own browser, and an imported PDF is read in memory and dropped when the
+        request finishes.{' '}
         <Link href="/design" className="text-accent border-b border-current pb-0.5">
           The design system
         </Link>{' '}

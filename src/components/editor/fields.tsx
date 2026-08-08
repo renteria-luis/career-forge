@@ -1,7 +1,7 @@
 'use client'
 
 import { useId } from 'react'
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import type { ComponentPropsWithoutRef, ReactNode, Ref } from 'react'
 
 /**
  * Form primitives.
@@ -37,9 +37,10 @@ interface FieldProps extends Omit<ComponentPropsWithoutRef<'input'>, 'id'> {
   label: string
   hint?: string
   error?: string
+  ref?: Ref<HTMLInputElement>
 }
 
-export function Field({ label, hint, error, className, ...props }: FieldProps) {
+export function Field({ label, hint, error, className, ref, ...props }: FieldProps) {
   const id = useId()
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
@@ -48,6 +49,7 @@ export function Field({ label, hint, error, className, ...props }: FieldProps) {
       <Label htmlFor={id}>{label}</Label>
       <input
         id={id}
+        ref={ref}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : hint ? hintId : undefined}
         className={control}
@@ -67,9 +69,10 @@ interface TextAreaProps extends Omit<ComponentPropsWithoutRef<'textarea'>, 'id'>
   label: string
   hint?: string
   error?: string
+  ref?: Ref<HTMLTextAreaElement>
 }
 
-export function TextArea({ label, hint, error, className, ...props }: TextAreaProps) {
+export function TextArea({ label, hint, error, className, ref, ...props }: TextAreaProps) {
   const id = useId()
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
@@ -78,6 +81,7 @@ export function TextArea({ label, hint, error, className, ...props }: TextAreaPr
       <Label htmlFor={id}>{label}</Label>
       <textarea
         id={id}
+        ref={ref}
         rows={3}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : hint ? hintId : undefined}

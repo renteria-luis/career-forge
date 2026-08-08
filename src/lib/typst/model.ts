@@ -14,7 +14,7 @@ import type { Profile } from '@/lib/resume/profile'
  */
 
 /** How a section arranges its entries. The template switches on this. */
-export type SectionLayout = 'prose' | 'entries' | 'inline'
+export type SectionLayout = 'prose' | 'entries' | 'inline' | 'joined'
 
 export interface RenderEntry {
   title?: string
@@ -25,7 +25,10 @@ export interface RenderEntry {
   highlights?: string[]
   /** Comma-joined by the template; used by inline sections. */
   keywords?: string[]
+  /** Where the link goes. */
   url?: string
+  /** What the link reads as — the same address without the scheme. */
+  urlLabel?: string
 }
 
 export interface RenderSection {
@@ -60,6 +63,22 @@ export interface RenderModel {
     margin: number
     density: number
   }
+}
+
+/**
+ * Fills in how a link should read. Applied wherever entries are built, so a
+ * project link prints the same way a contact link does.
+ */
+function withUrlLabel(entry: RenderEntry): RenderEntry {
+  return entry.url ? { ...entry, urlLabel: readableUrl(entry.url) } : entry
+}
+
+/** "https://www.github.com/x" prints as "github.com/x". */
+function readableUrl(url: string): string {
+  return url
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/$/, '')
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -109,9 +128,11 @@ const LAYOUTS: Record<StandardSectionId, SectionLayout> = {
   certificates: 'entries',
   awards: 'entries',
   publications: 'entries',
-  languages: 'inline',
+  // A language and its level is three words. Given a line each they waste most
+  // of a page; run together they cost one line for the whole section.
+  languages: 'joined',
   volunteer: 'entries',
-  interests: 'inline',
+  interests: 'joined',
   references: 'entries',
 }
 
@@ -140,7 +161,10 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         title: [e.studyType, e.area].filter(Boolean).join(', ') || undefined,
         subtitle: e.institution,
         meta: formatRange(e.startDate, e.endDate),
-        summary: e.score ? `Score: ${e.score}` : undefined,
+        summary: e.score || undefined,
+        // GPA, honours and coursework are optional and belong under the entry
+        // the way a job's achievements do.
+        highlights: e.courses?.length ? e.courses : undefined,
         url: e.url,
       }))
     case 'projects':
@@ -236,8 +260,10 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
         summary: e.summary,
         highlights: e.highlights,
         url: e.url,
+        urlLabel: e.url ? readableUrl(e.url) : undefined,
       }))
       .filter(hasContent)
+      .map(withUrlLabel)
     if (entries.length === 0) return null
     return { title: section.title ?? custom.title, layout: 'entries', entries }
   }
@@ -257,17 +283,11 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
   // tailoring uses. Revisit when entries gain ids of their own.
   const entries = (
     section.entryIds ? all.filter((_, i) => section.entryIds?.includes(String(i))) : all
-  ).filter(hasContent)
+  )
+    .filter(hasContent)
+    .map(withUrlLabel)
   if (entries.length === 0) return null
   return { title, layout, entries }
-}
-
-/** "https://www.github.com/x" prints as "github.com/x". */
-function readableUrl(url: string): string {
-  return url
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
-    .replace(/^www\./i, '')
-    .replace(/\/$/, '')
 }
 
 function buildContacts(profile: Profile, doc: ResumeDocument): Contact[] {
@@ -286,12 +306,20 @@ function buildContacts(profile: Profile, doc: ResumeDocument): Contact[] {
     const place = [b?.location?.city, b?.location?.countryCode].filter(Boolean).join(', ')
     if (place) contacts.push({ label: place })
   }
-  if (options.showUrl) {
-    if (b?.url) contacts.push({ label: readableUrl(b.url), href: b.url })
-    // A bare username is meaningless on paper; show the address someone can type.
-    for (const p of b?.profiles ?? []) {
-      if (p.url) contacts.push({ label: readableUrl(p.url), href: p.url })
-    }
+  if (options.showWebsite && b?.url) {
+    contacts.push({ label: readableUrl(b.url), href: b.url })
+  }
+  // A bare username is meaningless on paper; show the address someone can type.
+  for (const profile of b?.profiles ?? []) {
+    if (!profile.url) continue
+    const network = profile.network?.toLowerCase() ?? ''
+    const shown =
+      network === 'github'
+        ? options.showGithub
+        : network === 'linkedin'
+          ? options.showLinkedin
+          : options.showWebsite
+    if (shown) contacts.push({ label: readableUrl(profile.url), href: profile.url })
   }
 
   return contacts.filter((c) => c.label.trim() !== '')

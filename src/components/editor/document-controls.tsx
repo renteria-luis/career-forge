@@ -218,7 +218,9 @@ export function DocumentControls({
               ['showEmail', 'Email'],
               ['showPhone', 'Phone'],
               ['showLocation', 'Location'],
-              ['showUrl', 'Website and links'],
+              ['showWebsite', 'Portfolio or website'],
+              ['showGithub', 'GitHub'],
+              ['showLinkedin', 'LinkedIn'],
             ] as const
           ).map(([key, label]) => (
             <Toggle
