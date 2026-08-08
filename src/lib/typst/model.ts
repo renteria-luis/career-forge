@@ -94,6 +94,17 @@ function readableUrl(url: string): string {
     .replace(/\/$/, '')
 }
 
+/**
+ * Drops the blank entries a textarea leaves behind.
+ *
+ * The form keeps every line the user typed, including the empty one that Enter
+ * has just made. The page must not print an empty bullet for it.
+ */
+function lines(values?: string[]): string[] | undefined {
+  const kept = (values ?? []).filter((value) => value.trim() !== '')
+  return kept.length > 0 ? kept : undefined
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** "2023-02" reads as "Feb 2023"; a year-only date stays a year. */
@@ -158,7 +169,7 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         subtitle: w.name,
         meta: formatRange(w.startDate, w.endDate),
         summary: w.summary,
-        highlights: w.highlights,
+        highlights: lines(w.highlights),
         url: w.url,
       }))
     case 'volunteer':
@@ -168,7 +179,7 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         subtitle: v.organization,
         meta: formatRange(v.startDate, v.endDate),
         summary: v.summary,
-        highlights: v.highlights,
+        highlights: lines(v.highlights),
         url: v.url,
       }))
     case 'education':
@@ -180,7 +191,7 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         summary: e.score || undefined,
         // GPA, honours and coursework are optional and belong under the entry
         // the way a job's achievements do.
-        highlights: e.courses?.length ? e.courses : undefined,
+        highlights: lines(e.courses),
         url: e.url,
       }))
     case 'projects':
@@ -190,7 +201,7 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
         subtitle: p.roles?.join(', ') || p.entity,
         meta: formatRange(p.startDate, p.endDate),
         summary: p.description,
-        highlights: p.highlights,
+        highlights: lines(p.highlights),
         keywords: p.keywords,
         url: p.url,
       }))
@@ -280,7 +291,7 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
         subtitle: e.subtitle,
         meta: formatRange(e.startDate, e.endDate),
         summary: e.summary,
-        highlights: e.highlights,
+        highlights: lines(e.highlights),
         url: e.url,
         urlLabel: e.url ? readableUrl(e.url) : undefined,
       }))

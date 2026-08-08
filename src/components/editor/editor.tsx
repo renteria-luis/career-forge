@@ -41,6 +41,14 @@ export function Editor() {
   const [rearrange, setRearrange] = useState<RearrangeMode | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [draggingFile, setDraggingFile] = useState(false)
+  /**
+   * How many nested elements the pointer is currently inside.
+   *
+   * dragleave fires every time the pointer crosses into a child, so a single
+   * boolean flickers off the moment the file passes over anything. Counting
+   * enters against leaves is what makes it survive the whole page.
+   */
+  const dragDepth = useRef(0)
   const [report, setReport] = useState<ParseReport | null>(null)
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
@@ -69,6 +77,21 @@ export function Editor() {
     const flush = () => saveDraft(JSON.parse(latestDraft.current) as Draft)
     window.addEventListener('pagehide', flush)
     return () => window.removeEventListener('pagehide', flush)
+  }, [])
+
+  useEffect(() => {
+    // A drag that ends outside the window, or is abandoned with Escape, never
+    // reaches the page handlers — so the highlight would stay lit forever.
+    const clear = () => {
+      dragDepth.current = 0
+      setDraggingFile(false)
+    }
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+    }
   }, [])
 
   async function importResume(file: File) {
@@ -112,13 +135,14 @@ export function Editor() {
       }
       setDocument(withPaper)
 
+      // The limit follows the import in both directions. A shorter resume
+      // should not inherit the last one's ceiling any more than a longer one
+      // should be flagged for a length its author already chose.
       const pages = await compiledPageCount(result.profile, withPaper)
-      if (pages > withPaper.options.maxPages) {
-        setDocument((current) => ({
-          ...current,
-          options: { ...current.options, maxPages: Math.min(pages, 10) },
-        }))
-      }
+      setDocument((current) => ({
+        ...current,
+        options: { ...current.options, maxPages: Math.min(Math.max(pages, 1), 10) },
+      }))
     } catch {
       setImportError('That file could not be read.')
     } finally {
@@ -218,18 +242,29 @@ export function Editor() {
     <div
       data-dropzone
       className="relative flex h-dvh flex-col"
-      onDragOver={(event) => {
+      onDragEnter={(event) => {
         // Only react to a file, so dragging a block on the page is unaffected.
         if (!event.dataTransfer.types.includes('Files')) return
-        event.preventDefault()
+        dragDepth.current += 1
         setDraggingFile(true)
       }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return
+        // Without this the browser opens the file instead of letting us have it.
+        event.preventDefault()
+      }}
       onDragLeave={(event) => {
-        if (event.currentTarget === event.target) setDraggingFile(false)
+        if (!event.dataTransfer.types.includes('Files')) return
+        dragDepth.current -= 1
+        if (dragDepth.current <= 0) {
+          dragDepth.current = 0
+          setDraggingFile(false)
+        }
       }}
       onDrop={(event) => {
         if (!event.dataTransfer.types.includes('Files')) return
         event.preventDefault()
+        dragDepth.current = 0
         setDraggingFile(false)
         const file = event.dataTransfer.files[0]
         if (file) void importResume(file)
@@ -311,11 +346,19 @@ export function Editor() {
         {/* Both panes take an equal share and centre their own content, so the
             page and the form sit symmetrically instead of one hugging an edge. */}
         <section
-          className={`bg-surface-sunk min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${
+          className={`bg-surface-sunk relative min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${
             showPreview ? '' : 'hidden lg:block'
           }`}
           aria-label="Preview"
         >
+          {/* The highlight sits over the preview rather than the whole window:
+              the page is where a resume goes, and lighting up the form as well
+              says nothing about where to let go. */}
+          {draggingFile && (
+            <div className="bg-accent-sunk/90 border-accent rounded-panel pointer-events-none absolute inset-4 z-20 flex items-center justify-center border-2 border-dashed">
+              <p className="text-accent text-micro font-mono uppercase">Drop a PDF to import it</p>
+            </div>
+          )}
           <div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">

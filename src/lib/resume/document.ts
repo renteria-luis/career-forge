@@ -65,7 +65,7 @@ export const typography = z.object({
   /** Page margin in CSS pixels; 1px is exactly 0.75pt. */
   margin: z.number().min(MARGIN_MIN).max(MARGIN_MAX).default(MARGIN_DEFAULT),
   /** Multiplies the template's default spacing. Fills or tightens a short page. */
-  density: z.number().min(0.85).max(1.25).default(1),
+  density: z.number().min(0.85).max(1.25).default(0.9),
 })
 
 export const documentOptions = z.object({

@@ -132,6 +132,17 @@ function isHeadingByVocabulary(line: TextLine): StandardSectionId | undefined {
   const exact = LOOKUP.get(heading)
   if (exact) return exact
 
+  /**
+   * Tail matching only applies to something short enough to be a heading.
+   *
+   * A summary opening "Co-op student … with hands-on experience" ends on the
+   * word "experience" and was read as the work history, which swallowed the
+   * summary whole and filed its remaining lines as jobs. The length cap was
+   * only being applied to the typography rule, and a sentence is not a heading
+   * however it ends.
+   */
+  if (line.text.trim().length > MAX_HEADING_CHARS) return undefined
+
   for (const term of TERMS) {
     if (heading === term || heading.endsWith(` ${term}`)) return LOOKUP.get(term)
   }

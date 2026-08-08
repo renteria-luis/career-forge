@@ -7,9 +7,9 @@ describe('typography', () => {
     expect(typography.parse({})).toEqual({
       paper: 'letter',
       font: 'carlito',
-      size: 10.5,
-      margin: 64,
-      density: 1,
+      size: 10,
+      margin: 30,
+      density: 0.9,
     })
   })
 
