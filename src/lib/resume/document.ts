@@ -7,6 +7,7 @@ import {
   MARGIN_DEFAULT,
   MARGIN_MAX,
   MARGIN_MIN,
+  PAPER_IDS,
 } from './typography'
 
 /**
@@ -57,6 +58,7 @@ export const documentSection = z.object({
 })
 
 export const typography = z.object({
+  paper: z.enum(PAPER_IDS).default('letter'),
   font: z.enum(FONT_IDS).default('carlito'),
   /** Points. The template derives heading sizes and leading from this. */
   size: z.number().min(FONT_SIZE_MIN).max(FONT_SIZE_MAX).default(FONT_SIZE_DEFAULT),

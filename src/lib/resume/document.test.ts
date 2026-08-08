@@ -5,6 +5,7 @@ import { documentSection, resumeDocument, typography } from './document'
 describe('typography', () => {
   it('fills in defaults for an empty object', () => {
     expect(typography.parse({})).toEqual({
+      paper: 'letter',
       font: 'carlito',
       size: 10.5,
       margin: 64,

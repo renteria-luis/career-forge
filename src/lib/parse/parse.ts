@@ -19,6 +19,8 @@ import { bodyTextSize, detectSections } from './sections'
 
 export interface ParseReport {
   pages: number
+  /** The paper the file was set on, when recognisable. */
+  paper?: 'a4' | 'letter'
   /** No text layer at all — a scan or an image export. */
   imageOnly: boolean
   sections: { heading: string; mappedTo: StandardSectionId | null; entries: number }[]
@@ -338,6 +340,7 @@ function parseHeader(lines: TextLine[]): {
 export function parseResume(document: ExtractedDocument): ParseResult {
   const report: ParseReport = {
     pages: document.pages,
+    paper: document.paper,
     imageOnly: document.imageOnly,
     sections: [],
     warnings: [],
