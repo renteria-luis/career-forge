@@ -332,27 +332,64 @@ function toKeywordList(lines: TextLine[]): KeywordItem[] {
 }
 
 /**
- * Languages are written as a run on one line — "English (advanced) | Spanish
- * (native)" — or one per line with a label. Either way each language is its own
- * entry, and the level rides in brackets or after a colon.
+ * Reads one language and the level beside it.
+ *
+ * Every shape a resume writes it in: "Spanish: Native", "Spanish (Native)",
+ * "Spanish [C2]", "Spanish - Native", or the language on its own.
  */
-function toLanguages(lines: TextLine[]): { language?: string; fluency?: string }[] {
-  const languages: { language?: string; fluency?: string }[] = []
+function toLanguage(text: string): { language?: string; fluency?: string } | undefined {
+  const item = text.trim()
+  if (item === '') return undefined
 
-  for (const item of toKeywordList(lines)) {
-    // "Spanish: Native" arrives already split into a name and its level.
-    if (item.name && item.keywords?.length) {
-      languages.push({ language: item.name, fluency: item.keywords.join(', ') })
-      continue
-    }
-    for (const entry of item.keywords ?? (item.name ? [item.name] : [])) {
-      const bracketed = /^(.*?)\s*[([]([^)\]]+)[)\]]\s*$/.exec(entry)
-      if (bracketed) languages.push({ language: bracketed[1].trim(), fluency: bracketed[2].trim() })
-      else languages.push({ language: entry })
+  const bracketed = /^(.*?)\s*[([]([^)\]]+)[)\]]\s*$/.exec(item)
+  if (bracketed) return { language: bracketed[1].trim(), fluency: bracketed[2].trim() }
+
+  const colon = item.indexOf(':')
+  if (colon > 0) {
+    return {
+      language: item.slice(0, colon).trim(),
+      fluency: item.slice(colon + 1).trim() || undefined,
     }
   }
 
-  return languages.filter((entry) => entry.language)
+  // Spaces are required around the dash: a language can carry a hyphen, and
+  // "Serbo-Croatian" is one name rather than a level.
+  const dashed = /^(.*?)\s+[-–—]\s+(.*)$/.exec(item)
+  if (dashed) return { language: dashed[1].trim(), fluency: dashed[2].trim() }
+
+  return { language: item }
+}
+
+/**
+ * Languages, however they are laid out.
+ *
+ * They arrive run together on one line — "English: Advanced, Spanish: Native"
+ * or "English (advanced) | Spanish (native)" — or one per line as bullets. Each
+ * piece is its own language either way.
+ *
+ * They used to be read through the skills reader, which is built for a line
+ * like "Machine learning: PyTorch, scikit-learn": one label, then a list that
+ * belongs to it. Applied to languages that makes the first language the label
+ * and everything after it the level, so "English: Advanced, Spanish: Native,
+ * French: Basic" came back as English with a fluency of "Advanced, Spanish:
+ * Native, French: Basic". Languages are a list of pairs, not a labelled list,
+ * and they need their own reader.
+ */
+export function toLanguages(lines: TextLine[]): { language?: string; fluency?: string }[] {
+  const languages: { language?: string; fluency?: string }[] = []
+
+  for (const line of lines) {
+    const text = flatten(line.text.replace(BULLET, ''))
+    if (text === '') continue
+    // splitKeywords knows the separators a written list uses and leaves what is
+    // inside brackets alone, so "Spanish (Native, C2)" stays one language.
+    for (const piece of splitKeywords(text)) {
+      const entry = toLanguage(piece)
+      if (entry?.language) languages.push(entry)
+    }
+  }
+
+  return languages
 }
 
 /**

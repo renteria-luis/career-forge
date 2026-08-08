@@ -86,3 +86,29 @@ describe('dates', () => {
     expect(findField(index, 'Jun 2024')).toBe('work.0.endDate')
   })
 })
+
+describe('sections the index used to skip', () => {
+  it('finds the field a language came from', () => {
+    // Languages were not indexed at all, so clicking one on the page matched
+    // nothing and the click was silently dropped.
+    const index = buildFieldIndex({
+      languages: [
+        { language: 'Spanish', fluency: 'Native' },
+        { language: 'English', fluency: 'Professional' },
+      ],
+    })
+    expect(findField(index, 'Spanish')).toBe('languages.0.language')
+    expect(findField(index, 'Native')).toBe('languages.0.fluency')
+    expect(findField(index, 'English')).toBe('languages.1.language')
+  })
+
+  it('finds the field a certificate came from', () => {
+    const index = buildFieldIndex({
+      certificates: [{ name: 'AWS Solutions Architect', issuer: 'Amazon', date: '2025-04' }],
+    })
+    expect(findField(index, 'AWS Solutions Architect')).toBe('certificates.0.name')
+    expect(findField(index, 'Amazon')).toBe('certificates.0.issuer')
+    // Dates print formatted and are stored raw, so the printed form is indexed.
+    expect(findField(index, 'Apr 2025')).toBe('certificates.0.date')
+  })
+})

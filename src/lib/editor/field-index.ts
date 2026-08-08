@@ -81,6 +81,20 @@ export function buildFieldIndex(profile: Profile): FieldEntry[] {
     add(`skills.${index}.keywords`, skill.keywords?.join(', '))
   })
 
+  // The form has blocks for these two, so a click on the page has somewhere to
+  // land. Without them, clicking a language did nothing at all — the index had
+  // no entry to match and the click was silently dropped.
+  profile.languages?.forEach((language, index) => {
+    add(`languages.${index}.language`, language.language)
+    add(`languages.${index}.fluency`, language.fluency)
+  })
+
+  profile.certificates?.forEach((certificate, index) => {
+    add(`certificates.${index}.name`, certificate.name)
+    add(`certificates.${index}.issuer`, certificate.issuer)
+    add(`certificates.${index}.date`, formatDate(certificate.date))
+  })
+
   return entries
 }
 

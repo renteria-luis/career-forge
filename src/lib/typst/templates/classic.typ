@@ -213,7 +213,7 @@
     ]
   ] else if section.layout == "joined" [
     #block(above: 0pt, below: 0pt)[
-      #section.entries.map(joined-entry).join([ #h(0.3em)#text(fill: luma(140))[|]#h(0.3em) ])
+      #section.entries.map(joined-entry).join([,#h(0.3em)])
     ]
   ] else [
     #for (i, item) in section.entries.enumerate() [

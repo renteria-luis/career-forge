@@ -32,6 +32,7 @@ describe('extractLines', () => {
       'PROJECTS',
       'EDUCATION',
       'SKILLS',
+      'LANGUAGES',
     ])
   })
 
