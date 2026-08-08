@@ -37,6 +37,19 @@ test.describe('editing', () => {
     await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
   })
 
+  test('Enter starts a new bullet', async ({ page }) => {
+    // The form used to drop blank lines as they were typed, which removed the
+    // newline the moment Enter created it — a second bullet was impossible.
+    await page.goto('/editor')
+    const bullets = page.getByLabel('What you did').first()
+    await bullets.fill('First bullet')
+    await bullets.press('End')
+    await bullets.press('Enter')
+    await bullets.pressSequentially('Second bullet')
+    await expect(bullets).toHaveValue('First bullet\nSecond bullet')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+  })
+
   test('a bad date is reported on the field and not swallowed', async ({ page }) => {
     await page.goto('/editor')
     const started = page.getByLabel('Started').first()
@@ -134,8 +147,10 @@ test.describe('preview navigation', () => {
     const box = await canvas.boundingBox()
     if (!box) throw new Error('The preview did not render.')
 
-    // The name sits at the top of the page, left-aligned.
-    await canvas.click({ position: { x: 60, y: box.height * 0.06 } })
+    // The name is the first line under the top margin, and the header is
+    // centred. This fraction tracks the default margin, so it moves if that
+    // default does — which is a change worth failing on.
+    await canvas.click({ position: { x: box.width / 2, y: box.height * 0.04 } })
 
     await expect
       .poll(() => page.evaluate(() => document.activeElement?.getAttribute('name')))

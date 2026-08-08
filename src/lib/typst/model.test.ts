@@ -128,3 +128,27 @@ describe('empty entries', () => {
     expect(model.sections[0]?.entries).toHaveLength(2)
   })
 })
+
+describe('blank lines', () => {
+  it('drops the empty line a textarea leaves behind', () => {
+    // The form keeps every line the user typed, including the one Enter has
+    // just made, or the newline vanishes as fast as it is created. The page
+    // must not print an empty bullet for it.
+    const model = buildRenderModel(
+      {
+        basics: { name: 'Ana' },
+        work: [{ position: 'Engineer', highlights: ['Did a thing', '', '  ', 'Did another'] }],
+      },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'work', visible: true }] },
+    )
+    expect(model.sections[0]?.entries[0]?.highlights).toEqual(['Did a thing', 'Did another'])
+  })
+
+  it('leaves no bullet list at all when every line is blank', () => {
+    const model = buildRenderModel(
+      { basics: { name: 'Ana' }, work: [{ position: 'Engineer', highlights: ['', ''] }] },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'work', visible: true }] },
+    )
+    expect(model.sections[0]?.entries[0]?.highlights).toBeUndefined()
+  })
+})

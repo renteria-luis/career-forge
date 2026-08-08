@@ -71,11 +71,11 @@ function LineList({
           ref={field.ref}
           value={(field.value ?? []).join('\n')}
           onChange={(event) =>
+            // Blank lines are kept: dropping them here removed the newline the
+            // moment Enter created it, so a new bullet could never be started.
+            // They are dropped when the document is built instead.
             field.onChange(
-              event.target.value
-                .split('\n')
-                .map((line) => line.replace(/^[-•*]\s*/, ''))
-                .filter((line) => line.trim() !== ''),
+              event.target.value.split('\n').map((line) => line.replace(/^[-•*]\s*/, '')),
             )
           }
         />
