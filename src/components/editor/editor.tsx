@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
+import { loadDraft, saveDraft, type Draft } from '@/lib/editor/draft'
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { emptyDocument, emptyProfile } from '@/lib/editor/starter'
@@ -19,12 +20,18 @@ import { SectionIndex } from './section-index'
 type Pane = 'content' | 'layout'
 
 export function Editor() {
+  // Read once, during the first render. This component is loaded client-only,
+  // so there is no server-rendered markup for a restored draft to disagree with.
+  const [restored] = useState(loadDraft)
+
   const form = useForm<Profile>({
-    defaultValues: emptyProfile(),
+    defaultValues: restored?.profile ?? emptyProfile(),
     resolver: standardSchemaResolver(profileSchema),
     mode: 'onBlur',
   })
-  const [document, setDocument] = useState<ResumeDocument>(emptyDocument)
+  const [document, setDocument] = useState<ResumeDocument>(
+    () => restored?.document ?? emptyDocument(),
+  )
   const [pane, setPane] = useState<Pane>('content')
   const [showPreview, setShowPreview] = useState(false)
   const [report, setReport] = useState<ParseReport | null>(null)
@@ -37,6 +44,25 @@ export function Editor() {
   // The server revalidates everything, so a partial mid-edit value is fine.
   const values = useWatch({ control: form.control, defaultValue: form.getValues() }) as Profile
   const compiled = useCompiledPdf(values, document)
+
+  // Written on a delay so a burst of typing is one write, not one per keystroke.
+  const draft = JSON.stringify({ profile: values, document })
+  const latestDraft = useRef(draft)
+
+  useEffect(() => {
+    latestDraft.current = draft
+    const timer = setTimeout(() => saveDraft(JSON.parse(draft) as Draft), 400)
+    return () => clearTimeout(timer)
+  }, [draft])
+
+  useEffect(() => {
+    // The delay above means a refresh a moment after typing would lose the last
+    // edit. pagehide fires on reload, navigation and closing a tab, and is the
+    // one event mobile browsers reliably deliver before discarding a page.
+    const flush = () => saveDraft(JSON.parse(latestDraft.current) as Draft)
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [])
 
   async function importResume(file: File) {
     setImporting(true)

@@ -77,6 +77,48 @@ test.describe('layout controls', () => {
   })
 })
 
+test.describe('the draft survives', () => {
+  test('a refresh keeps what was typed', async ({ page }) => {
+    // A form this long is not one people will risk filling in twice.
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz Peña')
+    await page.getByLabel('Role').first().fill('Senior ML Engineer')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+
+    await page.reload()
+    await expect(page.getByLabel('Full name')).toHaveValue('Ana Ruiz Peña', { timeout: 15_000 })
+    await expect(page.getByLabel('Role').first()).toHaveValue('Senior ML Engineer')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+  })
+
+  test('a corrupted draft is discarded rather than crashing the editor', async ({ page }) => {
+    // Storage is editable by hand and outlives versions of this app.
+    await page.goto('/editor')
+    await page.evaluate(() =>
+      localStorage.setItem('career-forge:draft:v1', '{"profile":{"basics":{"email":42}}}'),
+    )
+    await page.reload()
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+  })
+})
+
+test.describe('profile links', () => {
+  test('a handle is stored as a full address', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('GitHub').fill('octocat')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    // Shown as the handle, kept as the address the document can link to.
+    await expect(page.getByLabel('GitHub')).toHaveValue('octocat')
+  })
+
+  test('a pasted address is accepted and shown as a handle', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('LinkedIn').fill('https://linkedin.com/in/octocat')
+    await expect(page.getByLabel('LinkedIn')).toHaveValue('octocat')
+  })
+})
+
 test.describe('preview navigation', () => {
   test('clicking a line in the preview opens the field it came from', async ({ page }) => {
     // The preview is a picture of the document, so finding what to change means
