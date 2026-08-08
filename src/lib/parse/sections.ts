@@ -93,6 +93,16 @@ for (const [id, words] of Object.entries(VOCABULARY) as [StandardSectionId, stri
 /** Longest headings a resume realistically uses. Past this it is a sentence. */
 const MAX_HEADING_CHARS = 45
 
+/**
+ * Shortest a heading can be.
+ *
+ * "London, ON" wraps so that "ON" lands on a line of its own, in capitals and
+ * short — everything the typography rule looks for. Read as a heading it split
+ * the education entry it belonged to in half. No section is named in two
+ * letters, so the floor costs nothing.
+ */
+const MIN_HEADING_CHARS = 4
+
 export interface DetectedSection {
   /** The heading exactly as written, for showing the user what we found. */
   heading: string
@@ -135,7 +145,7 @@ function isHeadingByVocabulary(line: TextLine): StandardSectionId | undefined {
  */
 function looksLikeHeading(line: TextLine, bodySize: number, largestSize: number): boolean {
   const text = line.text.trim()
-  if (text.length === 0 || text.length > MAX_HEADING_CHARS) return false
+  if (text.length < MIN_HEADING_CHARS || text.length > MAX_HEADING_CHARS) return false
   // The biggest type on the page is the person's name, and it is bold and
   // short — which is exactly what a heading looks like. Names are never
   // headings, so size rules this line out before anything else can promote it.

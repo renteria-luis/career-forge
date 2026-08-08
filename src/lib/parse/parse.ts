@@ -54,6 +54,9 @@ const BULLET = /^[•\-*‣▪·—–]\s*/
 /** Past this, a colon is punctuation in a sentence rather than a field label. */
 const LABEL_MAX_CHARS = 40
 
+/** Longest an employer or institution name realistically runs. */
+const NAME_MAX_CHARS = 60
+
 function splitKeywords(text: string): string[] {
   return text
     .split(/[,;·|]/)
@@ -119,7 +122,11 @@ function splitTitle(text: string): { title?: string; subtitle?: string } {
   if (!separator) return { title: text.trim() || undefined }
   return {
     title: text.slice(0, separator.index).trim() || undefined,
-    subtitle: text.slice(separator.index + separator[0].length).trim() || undefined,
+    subtitle:
+      text
+        .slice(separator.index + separator[0].length)
+        .replace(/^[|·—–,]\s*/, '')
+        .trim() || undefined,
   }
 }
 
@@ -148,7 +155,43 @@ function isBareUrl(text: string): boolean {
  * Templates vary, but nearly all of them mark the start of a job with one of
  * those two things.
  */
-function groupEntries(lines: TextLine[], bodySize: number): RawEntry[] {
+/**
+ * Rejoins a line that wrapped mid-phrase.
+ *
+ * "… | Fanshawe College, London," runs out of width and leaves "ON" on a line
+ * of its own. Nothing about the fragment says what it is, but the line above it
+ * ends on a comma, and a line ending on a separator has not finished.
+ *
+ * Only applied to lines at the same indent that carry no bullet, so a genuine
+ * next entry is never swallowed.
+ */
+function joinDanglingLines(lines: TextLine[]): TextLine[] {
+  const joined: TextLine[] = []
+
+  for (const line of lines) {
+    const previous = joined.at(-1)
+    const dangles = previous !== undefined && /[,|·\-–—/]$/.test(previous.text.trim())
+    const continues =
+      dangles &&
+      !BULLET.test(line.text.trim()) &&
+      Math.abs(line.x - previous.x) < 2 &&
+      !parseDateRange(line.text)
+
+    if (continues) {
+      joined[joined.length - 1] = {
+        ...previous,
+        text: `${previous.text.trim()} ${line.text.trim()}`,
+      }
+      continue
+    }
+    joined.push(line)
+  }
+
+  return joined
+}
+
+function groupEntries(rawLines: TextLine[], bodySize: number): RawEntry[] {
+  const lines = joinDanglingLines(rawLines)
   const entries: RawEntry[] = []
   let current: RawEntry | undefined
   /**
@@ -192,7 +235,12 @@ function groupEntries(lines: TextLine[], bodySize: number): RawEntry[] {
     if (opensEntry) {
       if (current) entries.push(current)
       bulletX = undefined
-      const { title, subtitle } = splitTitle(left.replace(/[|·—–,]\s*$/, '').trim())
+      const { title, subtitle } = splitTitle(
+        left
+          .replace(/[|·—–,]\s*$/, '')
+          .replace(/^[|·—–,]\s*/, '')
+          .trim(),
+      )
       current = {
         title,
         subtitle,
@@ -208,8 +256,15 @@ function groupEntries(lines: TextLine[], bodySize: number): RawEntry[] {
     // beside it is the location — which the standard has no field for, so only
     // the employer is kept.
     const [firstColumn] = text.split(COLUMN_BREAK)
-    if (!current.subtitle && current.highlights.length === 0 && !current.summary) {
-      current.subtitle = flatten(firstColumn)
+    const name = flatten(firstColumn)
+    /**
+     * An employer or an institution is a name: short, and not a sentence.
+     * Without this guard, a paragraph of detail sitting under a degree — "GPA
+     * 4.18/4.2, Dean's Honour Roll. Coursework: …" — was filed as the college.
+     */
+    const looksLikeName = name.length <= NAME_MAX_CHARS && !/[.;]$/.test(name)
+    if (!current.subtitle && current.highlights.length === 0 && !current.summary && looksLikeName) {
+      current.subtitle = name
     } else {
       const line = flatten(text)
       current.summary = current.summary ? `${current.summary} ${line}` : line
@@ -270,6 +325,49 @@ function toKeywordList(lines: TextLine[]): KeywordItem[] {
   return items
 }
 
+/**
+ * Languages are written as a run on one line — "English (advanced) | Spanish
+ * (native)" — or one per line with a label. Either way each language is its own
+ * entry, and the level rides in brackets or after a colon.
+ */
+function toLanguages(lines: TextLine[]): { language?: string; fluency?: string }[] {
+  const languages: { language?: string; fluency?: string }[] = []
+
+  for (const item of toKeywordList(lines)) {
+    // "Spanish: Native" arrives already split into a name and its level.
+    if (item.name && item.keywords?.length) {
+      languages.push({ language: item.name, fluency: item.keywords.join(', ') })
+      continue
+    }
+    for (const entry of item.keywords ?? (item.name ? [item.name] : [])) {
+      const bracketed = /^(.*?)\s*[([]([^)\]]+)[)\]]\s*$/.exec(entry)
+      if (bracketed) languages.push({ language: bracketed[1].trim(), fluency: bracketed[2].trim() })
+      else languages.push({ language: entry })
+    }
+  }
+
+  return languages.filter((entry) => entry.language)
+}
+
+/**
+ * Softens a shouted name.
+ *
+ * Resumes often set the name in capitals as a typographic choice, but the
+ * stored value is the person's name, not a style — and every template that
+ * wants capitals can apply them. A name already written in mixed case is left
+ * exactly as it is, because "McDonald" and "van der Berg" know better than a
+ * rule does.
+ */
+export function toTitleCase(name: string): string {
+  if (/[a-z]/.test(name)) return name
+  return name
+    .toLowerCase()
+    .replace(
+      /(^|[\s'\u2019-])([a-z\u00e0-\u00ff])/g,
+      (_, before: string, letter: string) => before + letter.toUpperCase(),
+    )
+}
+
 function parseHeader(lines: TextLine[]): {
   basics: NonNullable<Profile['basics']>
   found: Set<string>
@@ -325,7 +423,7 @@ function parseHeader(lines: TextLine[]): {
   const contactish = (text: string) => EMAIL.test(text) || URL.test(text) || PHONE.test(text)
   const nameLine = lines.find((l) => l.text.trim() !== '' && !contactish(l.text))
   if (nameLine) {
-    basics.name = flatten(nameLine.text)
+    basics.name = toTitleCase(flatten(nameLine.text))
     found.add('name')
     const after = lines[lines.indexOf(nameLine) + 1]
     if (after && !contactish(after.text) && after.text.trim().length <= 80) {
@@ -375,10 +473,7 @@ export function parseResume(document: ExtractedDocument): ParseResult {
         entryCount = profile.interests.length
         break
       case 'languages':
-        profile.languages = toKeywordList(section.lines).map((item) => ({
-          language: item.name ?? item.keywords?.[0],
-          fluency: item.name ? item.keywords?.join(', ') : undefined,
-        }))
+        profile.languages = toLanguages(section.lines)
         entryCount = profile.languages.length
         break
       default: {
@@ -439,8 +534,9 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
         startDate: dated[i].startDate,
         endDate: dated[i].endDate,
         // GPA, honours and coursework sit under a degree the way achievements
-        // sit under a job, so they arrive as the entry's bullets.
-        courses: dated[i].highlights,
+        // sit under a job. Written as bullets they arrive as bullets; written as
+        // a paragraph they are still details, not a description of the degree.
+        courses: dated[i].highlights ?? (dated[i].summary ? [dated[i].summary] : undefined),
         url: e.url,
       }))
       break

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sampleDocument, sampleProfile } from '@/lib/resume/fixtures'
 import { compileResume } from '@/lib/typst/compile'
 import { extractLines } from './extract'
-import { parseResume } from './parse'
+import { parseResume, toTitleCase } from './parse'
 
 /**
  * Full round trip: profile → PDF → text → profile. Anything the parser drops
@@ -264,5 +264,21 @@ describe('real-world layouts', () => {
     )
     expect(result.profile.basics?.url).toBeUndefined()
     expect(result.profile.basics?.profiles).toBeUndefined()
+  })
+})
+
+describe('toTitleCase', () => {
+  it.each([
+    ['JAMES SMITH DOE', 'James Smith Doe'],
+    ['ANA RUIZ PEÑA', 'Ana Ruiz Peña'],
+    ["MARY-JANE O'BRIEN", "Mary-Jane O'Brien"],
+  ])('softens %s to %s', (shouted, softened) => {
+    // Capitals on a resume are a typographic choice; the stored value is a name.
+    expect(toTitleCase(shouted)).toBe(softened)
+  })
+
+  it.each(['McDonald Smith', 'van der Berg', 'Ana Ruiz Peña'])('leaves %s alone', (name) => {
+    // A name already in mixed case knows better than a rule does.
+    expect(toTitleCase(name)).toBe(name)
   })
 })
