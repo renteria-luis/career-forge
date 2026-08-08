@@ -128,6 +128,15 @@ function splitTitle(text: string): { title?: string; subtitle?: string } {
 interface RawEntry {
   title?: string
   subtitle?: string
+  /**
+   * The subtitle line as it was set, columns and all.
+   *
+   * `subtitle` is the left column flattened, which is what an issuer or a
+   * publisher wants. A job needs the rest of the line too: the template
+   * right-aligns how the job was worked against the employer, and reading only
+   * the left column threw that away.
+   */
+  subtitleLine?: string
   startDate?: string
   endDate?: string
   summary?: string
@@ -247,9 +256,10 @@ function groupEntries(rawLines: TextLine[], bodySize: number): RawEntry[] {
     }
 
     if (!current) current = { highlights: [] }
-    // The line under a job title is the employer, and anything right-aligned
-    // beside it is the location — which the standard has no field for, so only
-    // the employer is kept.
+    // The line under a job title is the employer, with anything right-aligned
+    // beside it — where the job was, or how it was worked. Only the left column
+    // decides whether this reads as a name at all; the whole line is kept so
+    // the right of it can be read for the fields that now exist.
     const [firstColumn] = text.split(COLUMN_BREAK)
     const name = flatten(firstColumn)
     /**
@@ -260,6 +270,7 @@ function groupEntries(rawLines: TextLine[], bodySize: number): RawEntry[] {
     const looksLikeName = name.length <= NAME_MAX_CHARS && !/[.;]$/.test(name)
     if (!current.subtitle && current.highlights.length === 0 && !current.summary && looksLikeName) {
       current.subtitle = name
+      current.subtitleLine = text
     } else {
       const line = flatten(text)
       current.summary = current.summary ? `${current.summary} ${line}` : line
@@ -515,7 +526,7 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
     case 'work':
       profile.work = entries.map((e, i) => {
         // The employer line carries where the job was and how it was worked.
-        const { name, location, arrangement } = splitEmployer(e.subtitle)
+        const { name, location, arrangement } = splitEmployer(e.subtitleLine ?? e.subtitle)
         return { position: e.title, name, location, arrangement, ...dated[i] }
       })
       break
@@ -529,7 +540,7 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
     case 'education':
       profile.education = entries.map((e, i) => {
         // Same line, same split — "Fanshawe College | London, ON".
-        const { name, location } = splitEmployer(e.subtitle)
+        const { name, location } = splitEmployer(e.subtitleLine ?? e.subtitle)
         return {
           area: e.title,
           institution: name,

@@ -10,6 +10,27 @@ describe('splitEmployer', () => {
     })
   })
 
+  it('reads an arrangement set in its own column', () => {
+    // The extractor marks a gap wide enough to be a column with a tab, and the
+    // template right-aligns how a job was worked against the employer. Set
+    // against it by space alone, nothing in the words would tell "Remote"
+    // apart from part of the company's name.
+    expect(splitEmployer('Nomad Analytics, Toronto, ON\tRemote')).toEqual({
+      name: 'Nomad Analytics',
+      location: 'Toronto, ON',
+      arrangement: 'remote',
+    })
+  })
+
+  it('reads a place set in its own column', () => {
+    // Plenty of resumes right-align where the job was instead.
+    expect(splitEmployer('Acme Corp\tToronto, ON')).toEqual({
+      name: 'Acme Corp',
+      location: 'Toronto, ON',
+      arrangement: undefined,
+    })
+  })
+
   it('reads an arrangement written as its own segment', () => {
     expect(splitEmployer('Nomad Analytics • Toronto, ON • Remote')).toEqual({
       name: 'Nomad Analytics',

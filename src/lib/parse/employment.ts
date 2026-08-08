@@ -17,8 +17,15 @@ import { splitTrailingPlace } from './location'
  * makes everywhere else too.
  */
 
-/** What resumes put between an employer and a place. */
-const SEPARATOR = /\s*[|•·]\s*|\s*[—–]\s*|\s+-\s+/
+/**
+ * What resumes put between an employer and a place.
+ *
+ * A tab is one of them. The extractor writes it where a line has a gap wide
+ * enough to be a column, which is how a right-aligned "Remote" reaches here —
+ * set against the employer it is separated by space alone, and no amount of
+ * looking at the words would tell it apart from part of the name.
+ */
+const SEPARATOR = /\s*[|•·\t]\s*|\s*[—–]\s*|\s+-\s+/
 
 const ARRANGEMENT_WORDS = new Map<string, Arrangement>([
   ['remote', 'remote'],
