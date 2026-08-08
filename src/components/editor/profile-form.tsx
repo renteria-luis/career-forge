@@ -5,6 +5,7 @@ import type { DocumentSection } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { EntryCard, FormSection } from './entry-card'
 import { Button, Field, TextArea } from './fields'
+import { toHandle, toUrl } from '@/lib/editor/profile-links'
 import { OptionalField } from './optional-field'
 
 /**
@@ -154,19 +155,21 @@ function ProfileLinks({ form }: { form: Form }) {
 
         return (
           <div className="grid gap-3 sm:grid-cols-2">
+            {/* The handle is what people know themselves by; the address is
+                what the document needs. Either can be typed. */}
             <Field
               label="GitHub"
-              placeholder="github.com/you"
+              placeholder="your-username"
               name="basics.profiles.github"
-              value={valueFor('GitHub')}
-              onChange={(event) => update('GitHub', event.target.value)}
+              value={toHandle('github', valueFor('GitHub'))}
+              onChange={(event) => update('GitHub', toUrl('github', event.target.value))}
             />
             <Field
               label="LinkedIn"
-              placeholder="linkedin.com/in/you"
+              placeholder="your-username"
               name="basics.profiles.linkedin"
-              value={valueFor('LinkedIn')}
-              onChange={(event) => update('LinkedIn', event.target.value)}
+              value={toHandle('linkedin', valueFor('LinkedIn'))}
+              onChange={(event) => update('LinkedIn', toUrl('linkedin', event.target.value))}
             />
           </div>
         )
@@ -214,7 +217,6 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
         </div>
         <Field
           label="Website"
-          hint="No need to type https://."
           placeholder="anaruiz.me"
           error={errors.basics?.url?.message}
           {...register('basics.url')}
