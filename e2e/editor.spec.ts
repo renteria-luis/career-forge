@@ -160,6 +160,23 @@ test.describe('editing', () => {
     }
   })
 
+  test('backspace clears the line without eating the keywords', async ({ page }) => {
+    // It used to take back the last keyword once the line was empty, so
+    // correcting one word and holding the key a moment too long silently
+    // removed the ones already added. Each keyword has an × for that.
+    await page.goto('/editor')
+    const skills = page.locator('#section-skills')
+    await skills.getByRole('button', { name: 'Add a group' }).click()
+    const input = skills.getByLabel('Skills', { exact: true })
+    await input.fill('Python, Pandas')
+
+    await input.fill('SQK')
+    for (let press = 0; press < 8; press++) await input.press('Backspace')
+    await expect(input).toHaveValue('')
+    await expect(skills.getByRole('button', { name: 'Remove Python' })).toBeVisible()
+    await expect(skills.getByRole('button', { name: 'Remove Pandas' })).toBeVisible()
+  })
+
   test('a bracketed skill stays one skill', async ({ page }) => {
     // "Python (Pandas, Pydantic, Regex)" is one skill written with its parts.
     // Split on every comma it becomes "Python (Pandas" and "Regex)".

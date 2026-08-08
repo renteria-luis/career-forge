@@ -4,6 +4,7 @@ import { Fragment, memo, type ReactNode } from 'react'
 import {
   Controller,
   useFieldArray,
+  useFormState,
   useWatch,
   type FieldPath,
   type UseFormReturn,
@@ -218,7 +219,7 @@ export const ProfileForm = memo(function ProfileForm({
   form: Form
   sections: DocumentSection[]
 }) {
-  const { register, control, formState } = form
+  const { register, control } = form
   // Hooks cannot be called conditionally, so every list is prepared and only
   // the blocks the document asks for are rendered.
   const work = useFieldArray({ control, name: 'work' })
@@ -227,7 +228,11 @@ export const ProfileForm = memo(function ProfileForm({
   const skills = useFieldArray({ control, name: 'skills' })
   const languages = useFieldArray({ control, name: 'languages' })
   const certificates = useFieldArray({ control, name: 'certificates' })
-  const errors = formState.errors
+  // useFormState rather than form.formState. Reading errors off the form object
+  // subscribes whichever component called useForm — the editor above — and this
+  // one is memoized, so the re-render that carries a new error stopped here and
+  // a bad date was never reported on its field.
+  const { errors } = useFormState({ control })
 
   const shown = new Set(sections.filter((section) => section.visible).map((section) => section.id))
   const has = (id: string) => shown.has(id)

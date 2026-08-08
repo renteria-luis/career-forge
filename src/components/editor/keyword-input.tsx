@@ -163,11 +163,10 @@ export function KeywordInput({
               event.preventDefault()
               commit(draft)
             }
-            // Backspace on an empty line takes back the last one, which is
-            // faster than reaching for its ×.
-            if (event.key === 'Backspace' && draft === '' && values.length > 0) {
-              onChange(values.slice(0, -1))
-            }
+            // Backspace deletes text and nothing else. It used to take back
+            // the last keyword once the line was empty, which meant clearing
+            // one word and holding the key a moment too long silently ate the
+            // keywords already added. Each has an × for that.
           }}
           // Typing a keyword and clicking away should not throw it away.
           onBlur={() => commit(draft)}
