@@ -11,6 +11,18 @@ async function revealPreview(page: import('@playwright/test').Page) {
   if (await toggle.isVisible()) await toggle.click()
 }
 
+/** The form's blocks, top to bottom, as the anchor ids the index rail uses. */
+async function formBlockOrder(page: import('@playwright/test').Page) {
+  return page
+    .locator('form details[id^="section-"]')
+    .evaluateAll((blocks) => blocks.map((b) => b.id))
+}
+
+/** The index rail's ticks, top to bottom. Desktop only; it is hidden below lg. */
+async function indexOrder(page: import('@playwright/test').Page) {
+  return page.getByRole('navigation', { name: 'Sections' }).getByRole('button').allInnerTexts()
+}
+
 /** True while both panes are on screen and the preview is the drop target. */
 async function isPreviewOnScreen(page: import('@playwright/test').Page) {
   return page.getByLabel('Preview').isVisible()
@@ -285,6 +297,88 @@ test.describe('rearranging on the page', () => {
     await page.mouse.up()
 
     await expect(page.getByLabel('Role').first()).toHaveValue('Older Job')
+  })
+
+  test('moving a section on the page moves its form and its index entry', async ({
+    page,
+  }, testInfo) => {
+    // Entries already did this; sections did not. Dragging Projects above
+    // Experience rearranged the PDF and left the form and the index rail in
+    // their original order, so the editing surface disagreed with the page.
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page.getByLabel('Role').first().fill('Engineer')
+    const projects = page.locator('#section-projects')
+    await projects.getByRole('button', { name: 'Add a project' }).click()
+    await projects.getByLabel('Name').fill('Ledger')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+
+    expect(await formBlockOrder(page)).toEqual([
+      'section-you',
+      'section-experience',
+      'section-projects',
+      'section-education',
+      'section-skills',
+    ])
+
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    await page.getByRole('button', { name: 'Sections', exact: true }).click()
+    const from = page.locator('[aria-label="Move projects"]').first()
+    const to = page.locator('[aria-label="Move work"]').first()
+    await expect(from).toBeVisible({ timeout: 15_000 })
+
+    const fromBox = await from.boundingBox()
+    const toBox = await to.boundingBox()
+    if (!fromBox || !toBox) throw new Error('The blocks did not render.')
+    await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height / 2, { steps: 10 })
+    await page.mouse.up()
+
+    await expect
+      .poll(() => formBlockOrder(page), { timeout: 15_000 })
+      .toEqual([
+        'section-you',
+        'section-projects',
+        'section-experience',
+        'section-education',
+        'section-skills',
+      ])
+    // Set in uppercase, which is what innerText reports and what is on screen.
+    expect(await indexOrder(page)).toEqual(['YOU', 'PROJECTS', 'EXPERIENCE', 'EDUCATION', 'SKILLS'])
+  })
+
+  test('reordering a section from the layout tab moves its form block', async ({ page }) => {
+    // The same document either way, so the form has to follow both routes.
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'layout' }).click()
+    await page.getByRole('button', { name: 'Move Projects up' }).click()
+    await page.getByRole('tab', { name: 'content' }).click()
+
+    expect(await formBlockOrder(page)).toEqual([
+      'section-you',
+      'section-projects',
+      'section-experience',
+      'section-education',
+      'section-skills',
+    ])
+  })
+
+  test('a hidden section leaves the form even when it keeps its place', async ({ page }) => {
+    // Order and visibility are separate: hiding Projects must not drag the
+    // blocks under it out of the order the document puts them in.
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'layout' }).click()
+    await page.getByLabel('Projects', { exact: true }).uncheck()
+    await page.getByRole('tab', { name: 'content' }).click()
+
+    expect(await formBlockOrder(page)).toEqual([
+      'section-you',
+      'section-experience',
+      'section-education',
+      'section-skills',
+    ])
   })
 
   test('the paper size follows the toolbar', async ({ page }) => {
