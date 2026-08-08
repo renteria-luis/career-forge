@@ -147,9 +147,12 @@ test.describe('starting over', () => {
   test('clearing asks first and then empties everything', async ({ page }) => {
     await page.goto('/editor')
     await page.getByLabel('Full name').fill('Ana Ruiz')
-    await page.getByLabel('Phone').fill('+51 999 888 777')
+    await page.getByLabel('Phone').fill('+1 987-654-3210')
     await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
 
+    // Clear sits with the document controls, which on a phone are the other
+    // view — the same place the paper size lives.
+    await revealPreview(page)
     await page.getByRole('button', { name: 'Clear' }).click()
     await expect(page.getByText('Clear everything?')).toBeVisible()
 
@@ -170,6 +173,7 @@ test.describe('starting over', () => {
     await page.goto('/editor')
     await page.getByLabel('Full name').fill('Ana Ruiz')
     await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await revealPreview(page)
     await page.getByRole('button', { name: 'Clear' }).click()
     await page.getByRole('button', { name: 'Clear everything' }).click()
     await page.reload()
