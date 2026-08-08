@@ -65,6 +65,25 @@ export default function HomePage() {
         ))}
       </ol>
 
+      {/* The check is how most people will arrive, so it gets a place of its
+          own rather than a line in the footer. */}
+      <section className="border-hairline mt-20 border-t pt-8">
+        <p className="text-accent text-micro font-mono uppercase">Free · no account</p>
+        <h2 className="text-strong font-display text-display-m mt-3">
+          Already have a resume? See what a machine reads.
+        </h2>
+        <p className="text-muted max-w-measure text-body mt-3">
+          Drop a PDF and see which fields an applicant tracking system extracts, which it loses, and
+          the order it walks the page in. The file never leaves your browser.
+        </p>
+        <Link
+          href="/ats-check"
+          className="border-accent text-accent rounded-edge text-body mt-5 inline-block border px-4 py-2 transition-opacity hover:opacity-80"
+        >
+          Check your resume
+        </Link>
+      </section>
+
       <p className="text-muted max-w-measure text-small mt-20">
         Nothing you type reaches a server beyond compiling it. There is no account yet: your draft
         is kept in your own browser, and an imported PDF is read in memory and dropped when the
