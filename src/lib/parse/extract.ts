@@ -1,4 +1,4 @@
-import { getDocumentProxy } from 'unpdf'
+import { loadPdfjs } from './pdfjs'
 
 /**
  * Turns a PDF into positioned lines of text.
@@ -139,7 +139,8 @@ function detectPaper(width: number, height: number): 'a4' | 'letter' | undefined
 
 export async function extractLines(bytes: Uint8Array): Promise<ExtractedDocument> {
   ensureSumPrecise()
-  const doc = await getDocumentProxy(bytes)
+  const pdfjs = await loadPdfjs()
+  const doc = await pdfjs.getDocument({ data: bytes }).promise
   const lines: TextLine[] = []
   let paper: 'a4' | 'letter' | undefined
 
