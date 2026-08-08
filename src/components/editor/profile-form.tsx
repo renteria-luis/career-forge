@@ -292,6 +292,33 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                 onMove={(direction) => projects.move(index, index + direction)}
               >
                 <Field label="Name" {...register(`projects.${index}.name`)} />
+                {/* Behind a button because most projects have no meaningful
+                    start and end, but an import that carried dates shows them
+                    already open — the parser reads them and the page prints
+                    them, so there has to be somewhere to correct them. */}
+                <OptionalField
+                  label="Add dates"
+                  hasValue={Boolean(
+                    form.watch(`projects.${index}.startDate`) ||
+                    form.watch(`projects.${index}.endDate`),
+                  )}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field
+                      label="Started"
+                      placeholder="2023-02"
+                      error={errors.projects?.[index]?.startDate?.message}
+                      {...register(`projects.${index}.startDate`)}
+                    />
+                    <Field
+                      label="Ended"
+                      hint="Leave empty if you are still working on it."
+                      placeholder="2024-06"
+                      error={errors.projects?.[index]?.endDate?.message}
+                      {...register(`projects.${index}.endDate`)}
+                    />
+                  </div>
+                </OptionalField>
                 <OptionalField
                   label="Add stack"
                   hasValue={(form.watch(`projects.${index}.keywords`) ?? []).length > 0}

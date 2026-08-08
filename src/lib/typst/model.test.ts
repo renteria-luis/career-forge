@@ -101,6 +101,29 @@ describe('buildRenderModel', () => {
   })
 })
 
+describe('projects', () => {
+  it('prints a project date range the way a job reads', () => {
+    // Nothing covered projects here, and the form had no date inputs at all —
+    // so a range that arrived from an import was carried the whole way to the
+    // page with no test in between saying what it should look like.
+    const model = buildRenderModel(
+      {
+        projects: [{ name: 'Ledger', startDate: '2023-02', endDate: '2024-06' }],
+      },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'projects', visible: true }] },
+    )
+    expect(model.sections[0].entries[0].meta).toBe('Feb 2023 - Jun 2024')
+  })
+
+  it('leaves a dateless project without a date line', () => {
+    const model = buildRenderModel(
+      { projects: [{ name: 'Ledger', description: 'A double-entry ledger.' }] },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'projects', visible: true }] },
+    )
+    expect(model.sections[0].entries[0].meta).toBeUndefined()
+  })
+})
+
 describe('empty entries', () => {
   it('drops an entry that would print nothing', () => {
     // The editor opens with a blank role so there is somewhere to type. It must

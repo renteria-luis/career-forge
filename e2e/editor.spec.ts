@@ -11,6 +11,34 @@ async function revealPreview(page: import('@playwright/test').Page) {
   if (await toggle.isVisible()) await toggle.click()
 }
 
+/** True while both panes are on screen and the preview is the drop target. */
+async function isPreviewOnScreen(page: import('@playwright/test').Page) {
+  return page.getByLabel('Preview').isVisible()
+}
+
+/** Drags a file over the editor without dropping it, to show the drop target. */
+async function startFileDrag(page: import('@playwright/test').Page) {
+  await page.evaluate(() => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['not read'], 'resume.pdf', { type: 'application/pdf' }))
+    document
+      .querySelector('[data-dropzone]')
+      ?.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true }))
+  })
+}
+
+/** Whether one element's box sits inside another's. */
+async function contains(
+  outer: import('@playwright/test').Locator,
+  inner: import('@playwright/test').Locator,
+) {
+  const [a, b] = [await outer.boundingBox(), await inner.boundingBox()]
+  if (!a || !b) return false
+  return (
+    b.x >= a.x && b.y >= a.y && b.x + b.width <= a.x + a.width && b.y + b.height <= a.y + a.height
+  )
+}
+
 test.describe('editing', () => {
   test('typing a name recompiles the preview', async ({ page }) => {
     await page.goto('/editor')
@@ -48,6 +76,41 @@ test.describe('editing', () => {
     await bullets.pressSequentially('Second bullet')
     await expect(bullets).toHaveValue('First bullet\nSecond bullet')
     await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+  })
+
+  test('a project can be given dates', async ({ page }) => {
+    // The parser read project dates, the schema held them and the template
+    // printed them — but the form had no input for either, so a date that came
+    // in from an import could not be corrected and one could never be typed.
+    //
+    // Scoped to the Projects block: Experience and Education have fields with
+    // these same labels, and picking by position finds one of those instead.
+    await page.goto('/editor')
+    const projects = page.locator('#section-projects')
+    await projects.getByRole('button', { name: 'Add a project' }).click()
+    await projects.getByRole('button', { name: 'Add dates' }).click()
+
+    await projects.getByLabel('Name').fill('Ledger')
+    await projects.getByLabel('Started').fill('2023-02')
+    await projects.getByLabel('Ended').fill('2024-06')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+
+    // Surviving a reload is the proof the dates reached the profile rather than
+    // only the input they were typed into.
+    await page.reload()
+    await expect(page.locator('#section-projects').getByLabel('Started')).toHaveValue('2023-02', {
+      timeout: 15_000,
+    })
+  })
+
+  test('a project without dates is not asked for them', async ({ page }) => {
+    // Most projects have no meaningful start and end, and a form that shows
+    // every possible field to everyone is a form people abandon.
+    await page.goto('/editor')
+    const projects = page.locator('#section-projects')
+    await projects.getByRole('button', { name: 'Add a project' }).click()
+    await expect(projects.getByRole('button', { name: 'Add dates' })).toBeVisible()
+    await expect(projects.getByLabel('Started')).toHaveCount(0)
   })
 
   test('a bad date is reported on the field and not swallowed', async ({ page }) => {
@@ -314,6 +377,41 @@ test.describe('import and export', () => {
     )
 
     await expect(page.getByLabel('Full name')).toHaveValue('Dropped Import', { timeout: 20_000 })
+  })
+
+  test('the drop target is the pane on screen, not the whole window', async ({
+    page,
+  }, testInfo) => {
+    // The highlight used to be drawn over the shell as well as the preview, so
+    // dragging a file lit up the form — which is not somewhere a resume can be
+    // dropped into. The remaining one has to stay on the visible pane even once
+    // that pane has been scrolled, which the old one did not.
+    test.skip(testInfo.project.name === 'mobile', 'Dragging a file is a desktop interaction.')
+    await page.goto('/editor')
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+    await page
+      .getByLabel('What you did')
+      .first()
+      .fill(
+        Array.from({ length: 90 }, (_, i) => `A bullet long enough to fill a line, ${i}`).join(
+          '\n',
+        ),
+      )
+    // Long enough to overflow the page, so the status reads as a warning about
+    // length rather than "compiled in". The canvas is what says it has drawn.
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 20_000 })
+
+    const pane = page.getByLabel((await isPreviewOnScreen(page)) ? 'Preview' : 'Resume content')
+    // The pane holds the highlight still; the element inside it is what scrolls.
+    await pane.locator('.overflow-y-auto').evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    await startFileDrag(page)
+
+    // Visible ones only: a second target is rendered for the narrow layout,
+    // where the form is the only pane on screen, and is hidden at this width.
+    const highlight = page.getByText('Drop a PDF to import it').filter({ visible: true })
+    await expect(highlight).toHaveCount(1)
+    await expect(highlight).toBeInViewport()
+    expect(await contains(pane, highlight)).toBe(true)
   })
 
   test('a file that is not a PDF is refused with a usable message', async ({ page }) => {
