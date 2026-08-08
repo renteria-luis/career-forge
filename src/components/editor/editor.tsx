@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { clearDraft, loadDraft, saveDraft, type Draft } from '@/lib/editor/draft'
@@ -59,6 +59,10 @@ export function Editor() {
   // Compiler cannot memoize, so it gives up optimising this component entirely.
   // The server revalidates everything, so a partial mid-edit value is fine.
   const values = useWatch({ control: form.control, defaultValue: form.getValues() }) as Profile
+  // A fresh array on every render made the index rail tear down and rebuild its
+  // IntersectionObserver on each keystroke, for a list that changes only when
+  // the document does.
+  const sectionTitles = useMemo(() => formBlockTitles(document.sections), [document.sections])
   const compiled = useCompiledPdf(values, document)
 
   // Written on a delay so a burst of typing is one write, not one per keystroke.
@@ -346,7 +350,7 @@ export function Editor() {
                   <DocumentControls document={document} onChange={setDocument} />
                 )}
               </div>
-              {pane === 'content' && <SectionIndex titles={formBlockTitles(document.sections)} />}
+              {pane === 'content' && <SectionIndex titles={sectionTitles} />}
             </div>
           </div>
         </section>

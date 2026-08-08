@@ -84,7 +84,6 @@ export function KeywordInput({
           {values.map((keyword, index) => (
             <li
               key={`${keyword}-${index}`}
-              draggable
               onDragStart={(event) => {
                 setHeld(index)
                 event.dataTransfer.effectAllowed = 'move'
@@ -114,7 +113,11 @@ export function KeywordInput({
               {/* Dragging is the quick way and needs a pointer. Arrow keys are
                   the other way, so the order is reachable from a keyboard as
                   well — the same reason entries are reordered with buttons. */}
+              {/* The handle is the label, not the whole chip. With the chip
+                  draggable, pressing its × and drifting a pixel started a drag
+                  instead of clicking the button, so the × felt dead. */}
               <span
+                draggable
                 tabIndex={0}
                 role="button"
                 aria-label={`${keyword}. Use the arrow keys to move it.`}

@@ -523,8 +523,11 @@ test.describe('rearranging on the page', () => {
     await expect(page.locator('canvas').nth(1)).toBeVisible({ timeout: 20_000 })
 
     await page.getByRole('button', { name: 'Rearrange' }).click()
+    // Both blocks, not just the first: under load the layout can arrive for a
+    // one-page document first, and measuring then finds nothing to drag onto.
     const bands = page.locator('[aria-label^="Move work."]')
-    await expect(bands.first()).toBeVisible({ timeout: 15_000 })
+    await expect(bands).toHaveCount(2, { timeout: 15_000 })
+    await expect(bands.first()).toBeVisible()
 
     // The two blocks sit on different pages, so there is one scroll position
     // where each has a usable slice on screen. Find it rather than assume it.

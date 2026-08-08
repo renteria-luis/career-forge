@@ -1,7 +1,13 @@
 'use client'
 
-import { Fragment } from 'react'
-import { Controller, useFieldArray, type UseFormReturn } from 'react-hook-form'
+import { Fragment, memo, type ReactNode } from 'react'
+import {
+  Controller,
+  useFieldArray,
+  useWatch,
+  type FieldPath,
+  type UseFormReturn,
+} from 'react-hook-form'
 import { formBlockTitle, formBlocks, type FormBlockId } from '@/lib/editor/form-blocks'
 import type { DocumentSection } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
@@ -65,6 +71,49 @@ function LineList({
         />
       )}
     />
+  )
+}
+
+/**
+ * Watches one field, so typing in it does not re-render the rest of the form.
+ *
+ * `form.watch(name)` called during render subscribes the whole component to
+ * every field in the form: one keystroke anywhere re-rendered every entry,
+ * every chip and every bullet list in the document. `useWatch` subscribes to
+ * the named fields alone — but it is a hook, so each watched value has to live
+ * in a component of its own. That is all these two are.
+ */
+function EntryTitle({
+  form,
+  name,
+  fallback,
+}: {
+  form: Form
+  name: FieldPath<Profile>
+  fallback: string
+}) {
+  const value = useWatch({ control: form.control, name })
+  return <>{typeof value === 'string' && value.trim() !== '' ? value : fallback}</>
+}
+
+/** An OptionalField already open when the fields behind it hold something. */
+function WhenSet({
+  form,
+  names,
+  label,
+  children,
+}: {
+  form: Form
+  names: FieldPath<Profile>[]
+  label: string
+  children: ReactNode
+}) {
+  const values = useWatch({ control: form.control, name: names }) as unknown[]
+  const filled = values.some((value) => (Array.isArray(value) ? value.length > 0 : Boolean(value)))
+  return (
+    <OptionalField label={label} hasValue={filled}>
+      {children}
+    </OptionalField>
   )
 }
 
@@ -155,7 +204,20 @@ function ProfileLinks({ form }: { form: Form }) {
   )
 }
 
-export function ProfileForm({ form, sections }: { form: Form; sections: DocumentSection[] }) {
+/**
+ * Memoized because the editor above re-renders on every keystroke: it watches
+ * the whole profile to build the compile payload. Without this, that re-render
+ * walked the entire form on each character typed, which is what the profiler
+ * showed nearly all of its time going into. `form` and `sections` are both
+ * stable between document edits, so the form only rebuilds when it should.
+ */
+export const ProfileForm = memo(function ProfileForm({
+  form,
+  sections,
+}: {
+  form: Form
+  sections: DocumentSection[]
+}) {
   const { register, control, formState } = form
   // Hooks cannot be called conditionally, so every list is prepared and only
   // the blocks the document asks for are rendered.
@@ -186,7 +248,13 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   key={item.id}
                   index={index}
                   total={work.fields.length}
-                  title={form.watch(`work.${index}.position`) ?? ''}
+                  title={
+                    <EntryTitle
+                      form={form}
+                      name={`work.${index}.position`}
+                      fallback={`Entry ${index + 1}`}
+                    />
+                  }
                   onRemove={() => work.remove(index)}
                   onMove={(direction) => work.move(index, index + direction)}
                 >
@@ -216,9 +284,10 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                     placeholder="Toronto, ON, Canada"
                     {...register(`work.${index}.location`)}
                   />
-                  <OptionalField
+                  <WhenSet
+                    form={form}
+                    names={[`work.${index}.arrangement`]}
                     label="Add how you worked"
-                    hasValue={Boolean(form.watch(`work.${index}.arrangement`))}
                   >
                     <Select label="How you worked" {...register(`work.${index}.arrangement`)}>
                       <option value="">Not saying</option>
@@ -228,7 +297,7 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                         </option>
                       ))}
                     </Select>
-                  </OptionalField>
+                  </WhenSet>
                   <LineList
                     form={form}
                     name={`work.${index}.highlights`}
@@ -251,7 +320,13 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   key={item.id}
                   index={index}
                   total={projects.fields.length}
-                  title={form.watch(`projects.${index}.name`) ?? ''}
+                  title={
+                    <EntryTitle
+                      form={form}
+                      name={`projects.${index}.name`}
+                      fallback={`Entry ${index + 1}`}
+                    />
+                  }
                   onRemove={() => projects.remove(index)}
                   onMove={(direction) => projects.move(index, index + direction)}
                 >
@@ -260,12 +335,10 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                     start and end, but an import that carried dates shows them
                     already open — the parser reads them and the page prints
                     them, so there has to be somewhere to correct them. */}
-                  <OptionalField
+                  <WhenSet
+                    form={form}
+                    names={[`projects.${index}.startDate`, `projects.${index}.endDate`]}
                     label="Add dates"
-                    hasValue={Boolean(
-                      form.watch(`projects.${index}.startDate`) ||
-                      form.watch(`projects.${index}.endDate`),
-                    )}
                   >
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field
@@ -282,11 +355,8 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                         {...register(`projects.${index}.endDate`)}
                       />
                     </div>
-                  </OptionalField>
-                  <OptionalField
-                    label="Add stack"
-                    hasValue={(form.watch(`projects.${index}.keywords`) ?? []).length > 0}
-                  >
+                  </WhenSet>
+                  <WhenSet form={form} names={[`projects.${index}.keywords`]} label="Add stack">
                     <KeywordField
                       form={form}
                       name={`projects.${index}.keywords`}
@@ -294,18 +364,15 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                       hint="Separated by commas."
                       placeholder="Python, Pandas, SQL"
                     />
-                  </OptionalField>
-                  <OptionalField
-                    label="Add link"
-                    hasValue={Boolean(form.watch(`projects.${index}.url`))}
-                  >
+                  </WhenSet>
+                  <WhenSet form={form} names={[`projects.${index}.url`]} label="Add link">
                     <Field
                       label="Link"
                       placeholder="github.com/you/project"
                       error={errors.projects?.[index]?.url?.message}
                       {...register(`projects.${index}.url`)}
                     />
-                  </OptionalField>
+                  </WhenSet>
                   <LineList
                     form={form}
                     name={`projects.${index}.highlights`}
@@ -328,7 +395,13 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   key={item.id}
                   index={index}
                   total={education.fields.length}
-                  title={form.watch(`education.${index}.institution`) ?? ''}
+                  title={
+                    <EntryTitle
+                      form={form}
+                      name={`education.${index}.institution`}
+                      fallback={`Entry ${index + 1}`}
+                    />
+                  }
                   onRemove={() => education.remove(index)}
                   onMove={(direction) => education.move(index, index + direction)}
                 >
@@ -357,27 +430,25 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                       {...register(`education.${index}.endDate`)}
                     />
                   </div>
-                  <OptionalField
+                  <WhenSet
+                    form={form}
+                    names={[`education.${index}.studyType`]}
                     label="Add qualification"
-                    hasValue={Boolean(form.watch(`education.${index}.studyType`))}
                   >
                     <Field
                       label="Qualification"
                       placeholder="BSc"
                       {...register(`education.${index}.studyType`)}
                     />
-                  </OptionalField>
-                  <OptionalField
-                    label="Add details"
-                    hasValue={(form.watch(`education.${index}.courses`) ?? []).length > 0}
-                  >
+                  </WhenSet>
+                  <WhenSet form={form} names={[`education.${index}.courses`]} label="Add details">
                     <LineList
                       form={form}
                       name={`education.${index}.courses`}
                       label="Details"
                       hint="One per line. GPA, honours, coursework worth naming."
                     />
-                  </OptionalField>
+                  </WhenSet>
                 </EntryCard>
               ))}
             </ul>
@@ -394,7 +465,13 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   key={item.id}
                   index={index}
                   total={skills.fields.length}
-                  title={form.watch(`skills.${index}.name`) ?? ''}
+                  title={
+                    <EntryTitle
+                      form={form}
+                      name={`skills.${index}.name`}
+                      fallback={`Entry ${index + 1}`}
+                    />
+                  }
                   onRemove={() => skills.remove(index)}
                   onMove={(direction) => skills.move(index, index + direction)}
                 >
@@ -426,7 +503,13 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   key={item.id}
                   index={index}
                   total={languages.fields.length}
-                  title={form.watch(`languages.${index}.language`) ?? ''}
+                  title={
+                    <EntryTitle
+                      form={form}
+                      name={`languages.${index}.language`}
+                      fallback={`Entry ${index + 1}`}
+                    />
+                  }
                   onRemove={() => languages.remove(index)}
                   onMove={(direction) => languages.move(index, index + direction)}
                 >
@@ -458,7 +541,13 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
                   key={item.id}
                   index={index}
                   total={certificates.fields.length}
-                  title={form.watch(`certificates.${index}.name`) ?? ''}
+                  title={
+                    <EntryTitle
+                      form={form}
+                      name={`certificates.${index}.name`}
+                      fallback={`Entry ${index + 1}`}
+                    />
+                  }
                   onRemove={() => certificates.remove(index)}
                   onMove={(direction) => certificates.move(index, index + direction)}
                 >
@@ -530,4 +619,4 @@ export function ProfileForm({ form, sections }: { form: Form; sections: Document
       ))}
     </form>
   )
-}
+})

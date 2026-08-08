@@ -14,7 +14,8 @@ export function EntryCard({
 }: {
   index: number
   total: number
-  title: string
+  /** A node, so it can watch its own field instead of the whole form. */
+  title: ReactNode
   onRemove: () => void
   onMove: (direction: -1 | 1) => void
   children: ReactNode
@@ -33,7 +34,7 @@ export function EntryCard({
             >
               ›
             </span>
-            <span className="truncate">{title || `Entry ${index + 1}`}</span>
+            <span className="truncate">{title}</span>
           </p>
           {/* A click on any of these reaches the summary, whose default action is
             to fold the entry. Removing a job should not also fold it. */}

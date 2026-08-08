@@ -112,7 +112,15 @@ export function Preview({
 
       // Swapped in one go, so the old pages stay visible until these are ready.
       if (!cancelled) setPages(rendered)
-    })()
+    })().catch((error: unknown) => {
+      // Destroying the task to make way for a newer PDF rejects whatever it
+      // was drawing. That is this effect doing its job, not a failure — but
+      // unhandled it reached the browser as an uncaught rejection, which in
+      // development puts Next's error overlay over the page on every compile
+      // that lands mid-render.
+      if (cancelled || (error as { name?: string })?.name === 'RenderingCancelledException') return
+      throw error
+    })
 
     return () => {
       cancelled = true
