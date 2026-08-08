@@ -92,3 +92,40 @@ describe('compileResume', () => {
     expect(new TypstCompileError([]).name).toBe('TypstCompileError')
   })
 })
+
+describe('layout blocks', () => {
+  it('reports where every section and entry landed', () => {
+    // The preview is an image with no structure of its own, so rearranging on
+    // it depends on reading the layout back out of the compiler that made it.
+    const { blocks } = compileResume(sampleProfile, {
+      ...sampleDocument,
+      options: { ...sampleDocument.options, maxPages: 3 },
+    })
+    const ids = blocks.map((block) => block.id)
+
+    expect(ids).toContain('section:work')
+    expect(ids).toContain('work.0')
+    expect(ids).toContain('work.1')
+    expect(ids).toContain('section:education')
+  })
+
+  it('orders blocks down the page', () => {
+    const { blocks } = compileResume(sampleProfile, {
+      ...sampleDocument,
+      options: { ...sampleDocument.options, maxPages: 3 },
+    })
+    const work = blocks.find((b) => b.id === 'work.0')
+    const second = blocks.find((b) => b.id === 'work.1')
+    expect(work && second && second.y > work.y).toBe(true)
+  })
+
+  it('keeps the profile index, not the printed position', () => {
+    // Entries that would print nothing are dropped, so counting what came out
+    // would move the wrong one.
+    const { blocks } = compileResume(
+      { basics: { name: 'Ana' }, work: [{}, { position: 'Engineer' }] },
+      { ...sampleDocument, sections: [{ kind: 'standard', id: 'work', visible: true }] },
+    )
+    expect(blocks.map((b) => b.id)).toEqual(['section:work', 'work.1'])
+  })
+})

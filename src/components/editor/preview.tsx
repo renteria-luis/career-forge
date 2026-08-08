@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
 import type { CompiledPdf } from '@/lib/editor/use-compiled-pdf'
+import { RearrangeOverlay, type RearrangeMode } from './rearrange-overlay'
 
 /**
  * Draws the compiled resume.
@@ -41,15 +42,22 @@ interface TextBox {
 interface RenderedPage {
   canvas: HTMLCanvasElement
   boxes: TextBox[]
+  /** Page height in points, which is what block positions are measured in. */
+  heightPt: number
 }
 
 export function Preview({
   compiled,
   onSelectField,
+  rearrange,
+  onReorder,
 }: {
   compiled: CompiledPdf
   /** Called with the text under a click, so the editor can find its field. */
   onSelectField?: (text: string) => void
+  /** When set, blocks can be dragged into a new order on the page. */
+  rearrange?: RearrangeMode
+  onReorder?: (fromId: string, toId: string) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [pages, setPages] = useState<RenderedPage[]>([])
@@ -111,7 +119,7 @@ export function Preview({
           boxes.push({ str: item.str, left: x, top: y - h, right: x + w, bottom: y })
         }
 
-        rendered.push({ canvas, boxes })
+        rendered.push({ canvas, boxes, heightPt: base.height })
       }
 
       // Swapped in one go, so the old pages stay visible until these are ready.
@@ -137,7 +145,18 @@ export function Preview({
             page={rendered}
             number={index + 1}
             total={pages.length}
-            onSelectField={onSelectField}
+            onSelectField={rearrange ? undefined : onSelectField}
+            overlay={
+              rearrange && onReorder ? (
+                <RearrangeOverlay
+                  blocks={compiled.blocks}
+                  pageNumber={index + 1}
+                  pageHeights={pages.map((page) => page.heightPt)}
+                  mode={rearrange}
+                  onReorder={onReorder}
+                />
+              ) : null
+            }
           />
         ))
       )}
@@ -151,11 +170,13 @@ function CanvasFrame({
   number,
   total,
   onSelectField,
+  overlay,
 }: {
   page: RenderedPage
   number: number
   total: number
   onSelectField?: (text: string) => void
+  overlay?: React.ReactNode
 }) {
   const holder = useRef<HTMLDivElement>(null)
 
@@ -188,12 +209,15 @@ function CanvasFrame({
 
   return (
     <figure className="flex flex-col gap-1.5">
-      <div
-        ref={holder}
-        onClick={handleClick}
-        className="border-hairline rounded-edge cursor-pointer overflow-hidden border bg-white shadow-sm"
-        title="Click a line to jump to it in the form"
-      />
+      <div className="border-hairline rounded-edge relative overflow-hidden border bg-white shadow-sm">
+        <div
+          ref={holder}
+          onClick={handleClick}
+          className={onSelectField ? 'cursor-pointer' : undefined}
+          title={onSelectField ? 'Click a line to jump to it in the form' : undefined}
+        />
+        {overlay}
+      </div>
       {total > 1 && (
         <figcaption className="text-muted text-micro text-right font-mono">
           {number} / {total}

@@ -50,3 +50,6 @@ next-env.d.ts
 # local scratch
 /tmp/
 *.local
+
+# stray debug scripts at the repo root
+/*.probe.mjs

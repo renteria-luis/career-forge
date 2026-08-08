@@ -3,17 +3,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
-import { loadDraft, saveDraft, type Draft } from '@/lib/editor/draft'
+import { clearDraft, loadDraft, saveDraft, type Draft } from '@/lib/editor/draft'
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
+import { moveEntry, moveSection } from '@/lib/editor/rearrange'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
-import { emptyDocument, emptyProfile } from '@/lib/editor/starter'
+import { emptyDocument, emptyProfile, sectionsForProfile, toFormValues } from '@/lib/editor/starter'
 import type { ResumeDocument } from '@/lib/resume/document'
+import { PAPERS, type PaperId } from '@/lib/resume/typography'
 import { profile as profileSchema, type Profile } from '@/lib/resume/profile'
 import type { ParseReport } from '@/lib/parse/parse'
 import { DocumentControls } from './document-controls'
-import { Button } from './fields'
+import { ConfirmDialog } from './confirm-dialog'
+import { Button, Segmented } from './fields'
 import { ImportReport } from './import-report'
 import { Preview } from './preview'
+import type { RearrangeMode } from './rearrange-overlay'
 import { ProfileForm, formBlockTitles } from './profile-form'
 import { SectionIndex } from './section-index'
 
@@ -34,6 +38,9 @@ export function Editor() {
   )
   const [pane, setPane] = useState<Pane>('content')
   const [showPreview, setShowPreview] = useState(false)
+  const [rearrange, setRearrange] = useState<RearrangeMode | null>(null)
+  const [confirmingClear, setConfirmingClear] = useState(false)
+  const [draggingFile, setDraggingFile] = useState(false)
   const [report, setReport] = useState<ParseReport | null>(null)
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
@@ -79,8 +86,9 @@ export function Editor() {
         return
       }
       // reset() rather than setValue(), so the form is not left holding fields
-      // from whatever was there before the import.
-      form.reset(result.profile)
+      // from whatever was there before the import — and through toFormValues,
+      // because reset leaves an input alone when its new value is undefined.
+      form.reset(toFormValues(result.profile))
       setReport(result.report)
       // An imported resume arrives at whatever length it already was, and
       // telling someone their own resume is too long the moment they open it is
@@ -90,8 +98,22 @@ export function Editor() {
       // the same content typeset differently can gain or lose a page. So the
       // document is compiled once to find out, rather than reacting to the
       // preview's own compile from inside an effect.
-      const pages = await compiledPageCount(result.profile, document)
-      if (pages > document.options.maxPages) {
+      // The file already told us what paper it was set on; asking again is
+      // asking a question that has been answered.
+      const withPaper = {
+        ...document,
+        // The document only renders sections it lists, so an imported resume
+        // with Languages in it needs the section turned on or the data has
+        // nowhere to appear.
+        sections: sectionsForProfile(result.profile, document.sections),
+        typography: result.report.paper
+          ? { ...document.typography, paper: result.report.paper }
+          : document.typography,
+      }
+      setDocument(withPaper)
+
+      const pages = await compiledPageCount(result.profile, withPaper)
+      if (pages > withPaper.options.maxPages) {
         setDocument((current) => ({
           ...current,
           options: { ...current.options, maxPages: Math.min(pages, 10) },
@@ -140,6 +162,20 @@ export function Editor() {
     })
   }
 
+  /**
+   * A block dragged on the page moves the thing it was drawn from — a section
+   * in the document, or an entry within one of the profile's lists.
+   */
+  function reorder(fromId: string, toId: string) {
+    if (fromId.startsWith('section:')) {
+      setDocument((current) => moveSection(current, fromId, toId))
+      return
+    }
+    form.reset(toFormValues(moveEntry(form.getValues(), fromId, toId)), {
+      keepDefaultValues: true,
+    })
+  }
+
   /** Compiles once to find out how many pages the document runs to. */
   async function compiledPageCount(next: Profile, doc: ResumeDocument): Promise<number> {
     try {
@@ -152,6 +188,16 @@ export function Editor() {
     } catch {
       return 1
     }
+  }
+
+  function startOver() {
+    clearDraft()
+    form.reset(emptyProfile())
+    setDocument(emptyDocument())
+    setReport(null)
+    setImportError(null)
+    setRearrange(null)
+    setConfirmingClear(false)
   }
 
   function download() {
@@ -169,7 +215,26 @@ export function Editor() {
     // A full-height shell: the header and the mobile switch keep their size and
     // each pane scrolls on its own. Scrolling the page to reach the bottom of
     // the preview is what this replaces, and it needs no measured offsets.
-    <div className="flex h-dvh flex-col">
+    <div
+      data-dropzone
+      className="relative flex h-dvh flex-col"
+      onDragOver={(event) => {
+        // Only react to a file, so dragging a block on the page is unaffected.
+        if (!event.dataTransfer.types.includes('Files')) return
+        event.preventDefault()
+        setDraggingFile(true)
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) setDraggingFile(false)
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes('Files')) return
+        event.preventDefault()
+        setDraggingFile(false)
+        const file = event.dataTransfer.files[0]
+        if (file) void importResume(file)
+      }}
+    >
       <header className="border-hairline bg-surface z-10 shrink-0 border-b">
         <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <p className="font-display text-title text-strong mr-auto">Career Forge</p>
@@ -251,11 +316,74 @@ export function Editor() {
           }`}
           aria-label="Preview"
         >
-          <div className="mx-auto w-full max-w-[680px]">
-            <Preview compiled={compiled} onSelectField={focusField} />
+          <div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Segmented
+                  label="Paper size"
+                  value={document.typography.paper}
+                  options={(Object.keys(PAPERS) as PaperId[]).map((id) => ({
+                    value: id,
+                    label: PAPERS[id].label,
+                  }))}
+                  onChange={(paper) =>
+                    setDocument((current) => ({
+                      ...current,
+                      typography: { ...current.typography, paper },
+                    }))
+                  }
+                />
+                <Button onClick={() => setConfirmingClear(true)}>Clear</Button>
+              </div>
+              <div className="flex items-center gap-2">
+                {rearrange && (
+                  <Segmented
+                    label="What to rearrange"
+                    value={rearrange}
+                    options={[
+                      { value: 'sections', label: 'Sections' },
+                      { value: 'entries', label: 'Entries' },
+                    ]}
+                    onChange={setRearrange}
+                  />
+                )}
+                <Button
+                  variant={rearrange ? 'primary' : 'secondary'}
+                  onClick={() => setRearrange(rearrange ? null : 'entries')}
+                >
+                  {rearrange ? 'Done' : 'Rearrange'}
+                </Button>
+              </div>
+            </div>
+            {rearrange && (
+              <p className="text-muted text-small">
+                Drag a block onto another to swap their order. Relevance is not always chronology.
+              </p>
+            )}
+            <Preview
+              compiled={compiled}
+              onSelectField={focusField}
+              rearrange={rearrange ?? undefined}
+              onReorder={reorder}
+            />
           </div>
         </section>
       </div>
+
+      {draggingFile && (
+        <div className="bg-accent-sunk/90 border-accent rounded-panel pointer-events-none absolute inset-0 z-20 m-3 flex items-center justify-center border-2 border-dashed">
+          <p className="text-accent text-micro font-mono uppercase">Drop a PDF to import it</p>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmingClear}
+        title="Clear everything?"
+        body="Your resume, your layout and the draft saved in this browser are all removed, and the editor goes back to empty. This cannot be undone."
+        confirmLabel="Clear everything"
+        onConfirm={startOver}
+        onCancel={() => setConfirmingClear(false)}
+      />
 
       {/* Below the large breakpoint both panes cannot fit, so one is shown at a
           time and this switches between them. */}

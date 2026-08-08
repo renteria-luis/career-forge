@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ResumeDocument } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
+import type { LayoutBlock } from '@/lib/typst/compile'
 
 /**
  * Keeps a compiled PDF in step with the profile being edited.
@@ -28,6 +29,8 @@ export interface CompiledPdf {
   error: string | null
   /** Round trip in milliseconds, for the build readout. */
   elapsedMs: number | null
+  /** Where each section and entry landed, for rearranging on the page. */
+  blocks: LayoutBlock[]
 }
 
 const DEBOUNCE_MS = 250
@@ -40,6 +43,7 @@ export function useCompiledPdf(profile: Profile, document: ResumeDocument): Comp
     overflow: false,
     error: null,
     elapsedMs: null,
+    blocks: [],
   })
 
   const abortRef = useRef<AbortController | null>(null)
@@ -73,6 +77,12 @@ export function useCompiledPdf(profile: Profile, document: ResumeDocument): Comp
         }
 
         const bytes = new Uint8Array(await response.arrayBuffer())
+        let blocks: LayoutBlock[] = []
+        try {
+          blocks = JSON.parse(response.headers.get('x-layout') ?? '[]') as LayoutBlock[]
+        } catch {
+          // A preview that cannot be rearranged is still a preview.
+        }
         setState({
           bytes,
           status: 'ready',
@@ -80,6 +90,7 @@ export function useCompiledPdf(profile: Profile, document: ResumeDocument): Comp
           overflow: response.headers.get('x-overflow') === 'true',
           error: null,
           elapsedMs: Math.round(performance.now() - startedAt),
+          blocks,
         })
       } catch (error) {
         // An abort means newer input arrived; that is not a failure to report.

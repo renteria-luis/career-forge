@@ -73,6 +73,20 @@ export const FONT_SIZE_DEFAULT = 10.5
  * below about 20px — because it is the author's document and a screen-only PDF
  * has no such limit.
  */
+/**
+ * Page sizes. Letter is the default because this is aimed first at people
+ * applying in North America, where a resume on A4 arrives slightly wrong.
+ *
+ * The value is what Typst calls the paper; the label is what a person calls it.
+ */
+export const PAPERS = {
+  letter: { label: 'Letter', typst: 'us-letter', widthPt: 612, heightPt: 792 },
+  a4: { label: 'A4', typst: 'a4', widthPt: 595.28, heightPt: 841.89 },
+} as const
+
+export type PaperId = keyof typeof PAPERS
+export const PAPER_IDS = Object.keys(PAPERS) as [PaperId, ...PaperId[]]
+
 export const MARGIN_MIN = 0.5
 export const MARGIN_MAX = 120
 export const MARGIN_STEP = 0.5

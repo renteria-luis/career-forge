@@ -35,6 +35,11 @@ export interface ExtractedDocument {
   lines: TextLine[]
   /** Set when the file carries no text layer at all. */
   imageOnly: boolean
+  /**
+   * Which paper the file was set on, when it is recognisable. Someone importing
+   * a resume already chose a size, and asking them again is asking twice.
+   */
+  paper?: 'a4' | 'letter'
 }
 
 interface Run {
@@ -124,13 +129,26 @@ function groupIntoLines(runs: Run[], page: number): TextLine[] {
   })
 }
 
+/** A4 is 595x842pt and Letter 612x792pt; a few points of slack covers rounding. */
+function detectPaper(width: number, height: number): 'a4' | 'letter' | undefined {
+  const near = (value: number, target: number) => Math.abs(value - target) < 6
+  if (near(width, 612) && near(height, 792)) return 'letter'
+  if (near(width, 595) && near(height, 842)) return 'a4'
+  return undefined
+}
+
 export async function extractLines(bytes: Uint8Array): Promise<ExtractedDocument> {
   ensureSumPrecise()
   const doc = await getDocumentProxy(bytes)
   const lines: TextLine[] = []
+  let paper: 'a4' | 'letter' | undefined
 
   for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
     const page = await doc.getPage(pageNumber)
+    if (pageNumber === 1) {
+      const [, , width, height] = page.view as number[]
+      paper = detectPaper(width, height)
+    }
     const content = await page.getTextContent()
     // Text extraction alone never loads the fonts, so weight lookups all come
     // back empty. Walking the operator list is what populates them.
@@ -167,5 +185,6 @@ export async function extractLines(bytes: Uint8Array): Promise<ExtractedDocument
     // A scan with no text layer extracts to nothing. Saying so is far more
     // useful than handing back an empty profile as though parsing succeeded.
     imageOnly: lines.length === 0,
+    paper,
   }
 }

@@ -36,8 +36,15 @@
 #let leading = 0.62em * d
 /** Between paragraphs and between bullets inside one entry. */
 #let gap-paragraph = 0.72em * d
-/** Between one entry and the next within a section. */
-#let gap-entry = 1em * d
+/**
+ * Between one entry and the next within a section — one job to the next, one
+ * project to the next.
+ *
+ * The lines inside an entry (name to stack, stack to link, role to employer)
+ * are all separated by `leading` and are therefore already identical to each
+ * other. Changing one of them would break that.
+ */
+#let gap-entry = 0.9em * d
 /** Between a section heading and the first line under it. */
 #let gap-heading = 0.62em * d
 /**
@@ -53,12 +60,12 @@
  */
 #let heading-size = (page-opts.size + 1) * 1pt
 /** Between the last line of a section and the next section's heading. */
-#let gap-section = 1.5em * d
+#let gap-section = 1.3em * d
 
 #set document(title: data.name + " — Resume", author: data.name)
 
 #set page(
-  paper: "a4",
+  paper: page-opts.paper,
   // The model carries CSS pixels; 1px is exactly 0.75pt.
   margin: page-opts.margin * 0.75pt,
 )
@@ -85,6 +92,15 @@
 
 // The rule is positioned by its own value rather than by pulling it back up
 // with a negative offset, which was landing it on the descenders of the words.
+/**
+ * Records where a block landed on the page.
+ *
+ * The preview is a picture, so rearranging on it needs to know what sits where.
+ * A marker is placed at the start of every section and every entry, and the
+ * positions are gathered at the end of the document, once layout has run.
+ */
+#let mark(id) = if id != none [#metadata(id)<cf-mark>]
+
 #let section-heading(title) = {
   block(above: gap-section, below: 0pt, breakable: false)[
     // Paragraph spacing would otherwise be added between the title, the rule
@@ -174,6 +190,7 @@
 
 // --- sections ---------------------------------------------------------------
 #for section in data.sections [
+  #mark("section:" + section.ref)
   #section-heading(section.title)
   #if section.layout == "prose" [
     // The heading already carries the gap below its rule, the same as it does
@@ -181,12 +198,27 @@
     // far from its rule as anything else on the page.
     #block(above: 0pt, below: 0pt, section.at("body", default: ""))
   ] else if section.layout == "inline" [
-    #for (i, item) in section.entries.enumerate() [#inline-entry(item, i == 0)]
+    #for (i, item) in section.entries.enumerate() [
+      #mark(item.at("ref", default: none))#inline-entry(item, i == 0)
+    ]
   ] else if section.layout == "joined" [
     #block(above: 0pt, below: 0pt)[
       #section.entries.map(joined-entry).join([ #h(0.3em)#text(fill: luma(140))[|]#h(0.3em) ])
     ]
   ] else [
-    #for (i, item) in section.entries.enumerate() [#entry(item, i == 0)]
+    #for (i, item) in section.entries.enumerate() [
+      #mark(item.at("ref", default: none))#entry(item, i == 0)
+    ]
   ]
+]
+
+// Gathered after everything has been laid out, so every marker has a position.
+#context [
+  #metadata(
+    query(<cf-mark>).map(m => (
+      id: m.value,
+      page: m.location().page(),
+      y: m.location().position().y / 1pt,
+    )),
+  )<cf-layout>
 ]

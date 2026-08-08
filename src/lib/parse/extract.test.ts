@@ -26,7 +26,13 @@ describe('extractLines', () => {
 
   it('recovers every section heading in reading order', () => {
     const headings = lines.filter((l) => /^[A-Z][A-Z ]+$/.test(l))
-    expect(headings).toEqual(['SUMMARY', 'EXPERIENCE', 'PROJECTS', 'EDUCATION', 'SKILLS'])
+    expect(headings).toEqual([
+      'PROFESSIONAL SUMMARY',
+      'EXPERIENCE',
+      'PROJECTS',
+      'EDUCATION',
+      'SKILLS',
+    ])
   })
 
   it('keeps a right-aligned date on the same line as its job title', () => {
@@ -55,5 +61,21 @@ describe('extractLines', () => {
 
   it('keeps bullet text intact', () => {
     expect(lines.some((l) => l.includes('99.95% availability'))).toBe(true)
+  })
+})
+
+describe('paper', () => {
+  it('recognises the size our own compiler produced', async () => {
+    // Someone importing a resume already chose a size; asking again is asking
+    // twice. Letter is what the sample document is set on.
+    expect(extracted.paper).toBe('letter')
+  })
+
+  it('recognises A4', async () => {
+    const a4 = compileResume(sampleProfile, {
+      ...sampleDocument,
+      typography: { ...sampleDocument.typography, paper: 'a4' },
+    })
+    expect((await extractLines(a4.pdf)).paper).toBe('a4')
   })
 })

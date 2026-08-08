@@ -143,6 +143,93 @@ test.describe('preview navigation', () => {
   })
 })
 
+test.describe('starting over', () => {
+  test('clearing asks first and then empties everything', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page.getByLabel('Phone').fill('+1 987-654-3210')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+
+    // Clear sits with the document controls, which on a phone are the other
+    // view — the same place the paper size lives.
+    await revealPreview(page)
+    await page.getByRole('button', { name: 'Clear' }).click()
+    await expect(page.getByText('Clear everything?')).toBeVisible()
+
+    // Backing out leaves the work alone.
+    await page.getByRole('button', { name: 'Keep it' }).click()
+    await expect(page.getByLabel('Full name')).toHaveValue('Ana Ruiz')
+
+    await page.getByRole('button', { name: 'Clear' }).click()
+    await page.getByRole('button', { name: 'Clear everything' }).click()
+
+    // Every registered field, not just the ones the new value happens to name:
+    // react-hook-form leaves an input alone when it is reset to undefined.
+    await expect(page.getByLabel('Full name')).toHaveValue('')
+    await expect(page.getByLabel('Phone')).toHaveValue('')
+  })
+
+  test('a cleared draft does not come back on refresh', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await revealPreview(page)
+    await page.getByRole('button', { name: 'Clear' }).click()
+    await page.getByRole('button', { name: 'Clear everything' }).click()
+    await page.reload()
+    await expect(page.getByLabel('Full name')).toHaveValue('', { timeout: 15_000 })
+  })
+})
+
+test.describe('rearranging on the page', () => {
+  test('dragging an entry over another reorders them', async ({ page }, testInfo) => {
+    // Relevance is not always chronology: a job from years ago can be the one
+    // that matters for the posting in hand.
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page.getByLabel('Role').first().fill('Recent Job')
+    await page.getByRole('button', { name: 'Add a role' }).click()
+    await page.getByLabel('Role').nth(1).fill('Older Job')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    const from = page.locator('[aria-label="Move work.1"]').first()
+    const to = page.locator('[aria-label="Move work.0"]').first()
+    await expect(from).toBeVisible({ timeout: 15_000 })
+
+    const fromBox = await from.boundingBox()
+    const toBox = await to.boundingBox()
+    if (!fromBox || !toBox) throw new Error('The blocks did not render.')
+    await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height / 2, { steps: 10 })
+    await page.mouse.up()
+
+    await expect(page.getByLabel('Role').first()).toHaveValue('Older Job')
+  })
+
+  test('the paper size follows the toolbar', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await revealPreview(page)
+
+    const letter = page.getByRole('group', { name: 'Paper size' }).getByRole('button', {
+      name: 'Letter',
+    })
+    // Letter is the default, being what North American applications expect.
+    await expect(letter).toHaveAttribute('aria-pressed', 'true')
+
+    await page
+      .getByRole('group', { name: 'Paper size' })
+      .getByRole('button', { name: 'A4' })
+      .click()
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await expect(letter).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
 test.describe('import and export', () => {
   test('importing a PDF fills the form and reports what was read', async ({ page, request }) => {
     const pdf = Buffer.from(
@@ -176,6 +263,42 @@ test.describe('import and export', () => {
     await expect(page.getByLabel('Full name')).toHaveValue('Ana Ruiz Peña', { timeout: 15_000 })
     await expect(page.getByLabel('Role').first()).toHaveValue('Senior ML Engineer')
     await expect(page.getByText('What we read from your PDF')).toBeVisible()
+  })
+
+  test('a PDF dropped onto the page is imported', async ({ page, request }, testInfo) => {
+    // There is nothing to drag a file from on a phone.
+    test.skip(testInfo.project.name === 'mobile', 'Dragging a file is a desktop interaction.')
+    const pdf = Buffer.from(
+      await (
+        await request.post('/api/compile', {
+          data: {
+            profile: { basics: { name: 'Dropped Import' }, work: [{ name: 'Acme' }] },
+            document: { id: 'x', sections: [{ kind: 'standard', id: 'work', visible: true }] },
+          },
+        })
+      ).body(),
+    )
+
+    await page.goto('/editor')
+    // The editor is loaded in the browser only, so the drop target does not
+    // exist until it has mounted.
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+
+    // Dragging a file in is the shortest path from "I have a resume" to editing
+    // one, so it has to work without finding the button first.
+    await page.evaluate(
+      async (bytes: number[]) => {
+        const file = new File([new Uint8Array(bytes)], 'resume.pdf', { type: 'application/pdf' })
+        const transfer = new DataTransfer()
+        transfer.items.add(file)
+        const target = document.querySelector('[data-dropzone]') ?? document.body
+        target.dispatchEvent(new DragEvent('dragover', { dataTransfer: transfer, bubbles: true }))
+        target.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true }))
+      },
+      [...pdf],
+    )
+
+    await expect(page.getByLabel('Full name')).toHaveValue('Dropped Import', { timeout: 20_000 })
   })
 
   test('a file that is not a PDF is refused with a usable message', async ({ page }) => {

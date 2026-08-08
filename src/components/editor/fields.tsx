@@ -161,6 +161,44 @@ export function Toggle({
   )
 }
 
+/** A small run of mutually exclusive choices, for settings with two or three. */
+export function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { value: T; label: string }[]
+  onChange: (value: T) => void
+}) {
+  return (
+    <div
+      className="border-hairline rounded-edge flex items-center border p-0.5"
+      role="group"
+      aria-label={label}
+    >
+      {options.map((option) => {
+        const current = option.value === value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={current}
+            onClick={() => onChange(option.value)}
+            className={`rounded-edge text-micro px-2.5 py-1 font-mono transition-colors ${
+              current ? 'bg-accent text-paper' : 'text-muted hover:text-strong'
+            }`}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function Button({
   variant = 'secondary',
   className,
