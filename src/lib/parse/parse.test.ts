@@ -160,6 +160,22 @@ describe('real-world layouts', () => {
     expect(result.report.sections.map((s) => s.mappedTo)).toEqual(['summary', 'projects'])
   })
 
+  it('does not read a sentence ending in a section word as a heading', () => {
+    // A summary opening "Co-op student … with hands-on experience" ends on the
+    // word "experience". Read as the work history, it swallowed the summary
+    // whole and filed the rest of its lines as jobs.
+    const result = parseResume(
+      doc([
+        line('James Smith', 760, 16, true),
+        line('PROFESSIONAL SUMMARY', 740, 10, true),
+        line('Co-op student in Machine Learning at Fanshawe College with hands-on experience', 730),
+        line('in data mapping and data quality assurance.', 720),
+      ]),
+    )
+    expect(result.report.sections.map((s) => s.mappedTo)).toEqual(['summary'])
+    expect(result.profile.basics?.summary).toContain('Co-op student')
+  })
+
   it('does not read "Work Authorization" as a work history', () => {
     // The reason matching is anchored to the tail rather than anywhere in the
     // heading: a wrong mapping silently misfiles, which is worse than none.
