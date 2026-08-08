@@ -14,7 +14,7 @@ import type { Profile } from '@/lib/resume/profile'
  */
 
 /** How a section arranges its entries. The template switches on this. */
-export type SectionLayout = 'prose' | 'entries' | 'inline'
+export type SectionLayout = 'prose' | 'entries' | 'inline' | 'joined'
 
 export interface RenderEntry {
   title?: string
@@ -63,6 +63,14 @@ export interface RenderModel {
     margin: number
     density: number
   }
+}
+
+/**
+ * Fills in how a link should read. Applied wherever entries are built, so a
+ * project link prints the same way a contact link does.
+ */
+function withUrlLabel(entry: RenderEntry): RenderEntry {
+  return entry.url ? { ...entry, urlLabel: readableUrl(entry.url) } : entry
 }
 
 /** "https://www.github.com/x" prints as "github.com/x". */
@@ -120,9 +128,11 @@ const LAYOUTS: Record<StandardSectionId, SectionLayout> = {
   certificates: 'entries',
   awards: 'entries',
   publications: 'entries',
-  languages: 'inline',
+  // A language and its level is three words. Given a line each they waste most
+  // of a page; run together they cost one line for the whole section.
+  languages: 'joined',
   volunteer: 'entries',
-  interests: 'inline',
+  interests: 'joined',
   references: 'entries',
 }
 
@@ -253,6 +263,7 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
         urlLabel: e.url ? readableUrl(e.url) : undefined,
       }))
       .filter(hasContent)
+      .map(withUrlLabel)
     if (entries.length === 0) return null
     return { title: section.title ?? custom.title, layout: 'entries', entries }
   }
@@ -272,7 +283,9 @@ function buildSection(section: DocumentSection, profile: Profile): RenderSection
   // tailoring uses. Revisit when entries gain ids of their own.
   const entries = (
     section.entryIds ? all.filter((_, i) => section.entryIds?.includes(String(i))) : all
-  ).filter(hasContent)
+  )
+    .filter(hasContent)
+    .map(withUrlLabel)
   if (entries.length === 0) return null
   return { title, layout, entries }
 }

@@ -127,6 +127,15 @@
   }
 }
 
+/** "Spanish: Native", to be run together with its neighbours on one line. */
+#let joined-entry(item) = {
+  let label = if "title" in item {
+    text(weight: 700, if "keywords" in item { item.title + ": " } else { item.title })
+  }
+  let body = if "keywords" in item { item.keywords.join(", ") }
+  box[#label#body]
+}
+
 #let inline-entry(item, first) = {
   let label = if "title" in item {
     text(weight: 700, if "keywords" in item { item.title + ": " } else { item.title })
@@ -170,6 +179,10 @@
     #block(above: gap-heading, below: 0pt, section.at("body", default: ""))
   ] else if section.layout == "inline" [
     #for (i, item) in section.entries.enumerate() [#inline-entry(item, i == 0)]
+  ] else if section.layout == "joined" [
+    #block(above: 0pt, below: 0pt)[
+      #section.entries.map(joined-entry).join([ #h(0.3em)#text(fill: luma(140))[|]#h(0.3em) ])
+    ]
   ] else [
     #for (i, item) in section.entries.enumerate() [#entry(item, i == 0)]
   ]
