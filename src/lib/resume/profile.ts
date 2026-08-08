@@ -22,33 +22,64 @@ export const partialDate = z
   .string()
   .regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, 'Use YYYY, YYYY-MM or YYYY-MM-DD')
 
+/**
+ * Optional fields that treat blank input as absent.
+ *
+ * HTML inputs hand back "" for anything untouched or cleared, and "" is not a
+ * valid email, URL or date — so without this, every empty optional field on a
+ * form fails validation. Clearing a field means "I do not have one", and that
+ * belongs to the data contract rather than to one form, so the importer and any
+ * generated output get the same treatment.
+ *
+ * Values are trimmed on the way through. Trailing whitespace in a job title is
+ * never meaningful and it shows up in the PDF.
+ *
+ * Written as transform-then-pipe rather than z.preprocess, which types its
+ * input as unknown and drags that into every inferred type. The trailing
+ * .optional() is what makes the key itself optional in the inferred type, so
+ * callers can build a partial profile without spelling out every absent field.
+ */
+const blank = z
+  .string()
+  .optional()
+  .transform((value) => {
+    const trimmed = value?.trim()
+    return trimmed === '' || trimmed === undefined ? undefined : trimmed
+  })
+
+/** Free text. */
+const text = () => blank.optional()
+const email = () => blank.pipe(z.email().optional()).optional()
+const url = () => blank.pipe(z.url().optional()).optional()
+const date = () => blank.pipe(partialDate.optional()).optional()
+
 export const location = z.object({
-  address: z.string().optional(),
-  postalCode: z.string().optional(),
-  city: z.string().optional(),
-  countryCode: z.string().optional(),
-  region: z.string().optional(),
+  address: text(),
+  postalCode: text(),
+  city: text(),
+  countryCode: text(),
+  region: text(),
 })
 
 /** A social or professional presence. `network` is the display name, e.g. GitHub. */
 export const socialProfile = z.object({
-  network: z.string().optional(),
-  username: z.string().optional(),
-  url: z.url().optional(),
+  network: text(),
+  username: text(),
+  url: url(),
 })
 
 export const basics = z.object({
-  name: z.string().optional(),
+  name: text(),
   /**
    * The headline under the name — "ML Engineer | Data Scientist". JSON Resume
    * calls this `label`; keep the standard name even though the UI says headline.
    */
-  label: z.string().optional(),
-  image: z.url().optional(),
-  email: z.email().optional(),
-  phone: z.string().optional(),
-  url: z.url().optional(),
-  summary: z.string().optional(),
+  label: text(),
+  image: url(),
+  email: email(),
+  phone: text(),
+  url: url(),
+  summary: text(),
   location: location.optional(),
   profiles: z.array(socialProfile).optional(),
 })
@@ -59,56 +90,56 @@ export const basics = z.object({
  * step drop individual bullets, and the smoke detector cite a specific claim.
  */
 export const work = z.object({
-  name: z.string().optional(),
-  position: z.string().optional(),
-  url: z.url().optional(),
-  startDate: partialDate.optional(),
-  endDate: partialDate.optional(),
-  summary: z.string().optional(),
+  name: text(),
+  position: text(),
+  url: url(),
+  startDate: date(),
+  endDate: date(),
+  summary: text(),
   highlights: z.array(z.string()).optional(),
 })
 
 export const volunteer = z.object({
-  organization: z.string().optional(),
-  position: z.string().optional(),
-  url: z.url().optional(),
-  startDate: partialDate.optional(),
-  endDate: partialDate.optional(),
-  summary: z.string().optional(),
+  organization: text(),
+  position: text(),
+  url: url(),
+  startDate: date(),
+  endDate: date(),
+  summary: text(),
   highlights: z.array(z.string()).optional(),
 })
 
 export const education = z.object({
-  institution: z.string().optional(),
-  url: z.url().optional(),
-  area: z.string().optional(),
-  studyType: z.string().optional(),
-  startDate: partialDate.optional(),
-  endDate: partialDate.optional(),
-  score: z.string().optional(),
+  institution: text(),
+  url: url(),
+  area: text(),
+  studyType: text(),
+  startDate: date(),
+  endDate: date(),
+  score: text(),
   courses: z.array(z.string()).optional(),
 })
 
 export const award = z.object({
-  title: z.string().optional(),
-  date: partialDate.optional(),
-  awarder: z.string().optional(),
-  summary: z.string().optional(),
+  title: text(),
+  date: date(),
+  awarder: text(),
+  summary: text(),
 })
 
 export const certificate = z.object({
-  name: z.string().optional(),
-  date: partialDate.optional(),
-  issuer: z.string().optional(),
-  url: z.url().optional(),
+  name: text(),
+  date: date(),
+  issuer: text(),
+  url: url(),
 })
 
 export const publication = z.object({
-  name: z.string().optional(),
-  publisher: z.string().optional(),
-  releaseDate: partialDate.optional(),
-  url: z.url().optional(),
-  summary: z.string().optional(),
+  name: text(),
+  publisher: text(),
+  releaseDate: date(),
+  url: url(),
+  summary: text(),
 })
 
 /**
@@ -117,49 +148,49 @@ export const publication = z.object({
  * no evidence behind it.
  */
 export const skill = z.object({
-  name: z.string().optional(),
-  level: z.string().optional(),
+  name: text(),
+  level: text(),
   keywords: z.array(z.string()).optional(),
 })
 
 export const language = z.object({
-  language: z.string().optional(),
-  fluency: z.string().optional(),
+  language: text(),
+  fluency: text(),
 })
 
 export const interest = z.object({
-  name: z.string().optional(),
+  name: text(),
   keywords: z.array(z.string()).optional(),
 })
 
 export const reference = z.object({
-  name: z.string().optional(),
-  reference: z.string().optional(),
+  name: text(),
+  reference: text(),
 })
 
 export const project = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
+  name: text(),
+  description: text(),
   highlights: z.array(z.string()).optional(),
   keywords: z.array(z.string()).optional(),
-  startDate: partialDate.optional(),
-  endDate: partialDate.optional(),
-  url: z.url().optional(),
+  startDate: date(),
+  endDate: date(),
+  url: url(),
   roles: z.array(z.string()).optional(),
-  entity: z.string().optional(),
-  type: z.string().optional(),
+  entity: text(),
+  type: text(),
 })
 
 /** One entry in a section the user named themselves. */
 export const customEntry = z.object({
   id: z.string(),
-  title: z.string().optional(),
-  subtitle: z.string().optional(),
-  startDate: partialDate.optional(),
-  endDate: partialDate.optional(),
-  summary: z.string().optional(),
+  title: text(),
+  subtitle: text(),
+  startDate: date(),
+  endDate: date(),
+  summary: text(),
   highlights: z.array(z.string()).optional(),
-  url: z.url().optional(),
+  url: url(),
 })
 
 /**
@@ -170,18 +201,18 @@ export const customEntry = z.object({
 export const customSection = z.object({
   id: z.string(),
   title: z.string(),
-  entries: z.array(customEntry).default([]),
+  entries: z.array(customEntry).optional(),
 })
 
 /** Ours, not the standard's. Kept apart so exports stay valid JSON Resume. */
 export const extensions = z.object({
-  customSections: z.array(customSection).default([]),
+  customSections: z.array(customSection).optional(),
 })
 
 export const profileMeta = z.object({
-  canonical: z.url().optional(),
-  version: z.string().optional(),
-  lastModified: z.string().optional(),
+  canonical: url(),
+  version: text(),
+  lastModified: text(),
 })
 
 export const profile = z.object({

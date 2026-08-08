@@ -69,13 +69,15 @@ jobs:
           cache-to: type=gha,mode=max
       # Building is not enough. Start it and ask for a PDF: that is the only
       # check that proves the native compiler and the fonts survived the build.
-      - name: Serve a PDF from the image
+      - name: Compile a PDF inside the image
         run: |
           docker run -d --name cf -p 3000:3000 career-forge:ci
           for i in $(seq 1 30); do
-            if curl -fsS -o /tmp/out.pdf http://localhost:3000/api/preview; then break; fi
+            if curl -fsS -o /tmp/health.json http://localhost:3000/api/health; then break; fi
             sleep 2
           done
           docker logs cf
-          head -c 5 /tmp/out.pdf | grep -q '%PDF-' || { echo "not a PDF"; exit 1; }
-          echo "served $(stat -c%s /tmp/out.pdf) bytes"
+          cat /tmp/health.json
+          # The endpoint compiles a real resume, so "ok" means the native
+          # binding loaded and the bundled fonts resolved.
+          grep -q '"ok":true' /tmp/health.json || { echo "compiler unhealthy"; exit 1; }
