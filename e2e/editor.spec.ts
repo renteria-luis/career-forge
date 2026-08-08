@@ -143,6 +143,55 @@ test.describe('preview navigation', () => {
   })
 })
 
+test.describe('rearranging on the page', () => {
+  test('dragging an entry over another reorders them', async ({ page }, testInfo) => {
+    // Relevance is not always chronology: a job from years ago can be the one
+    // that matters for the posting in hand.
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await page.getByLabel('Role').first().fill('Recent Job')
+    await page.getByRole('button', { name: 'Add a role' }).click()
+    await page.getByLabel('Role').nth(1).fill('Older Job')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    const from = page.locator('[aria-label="Move work.1"]').first()
+    const to = page.locator('[aria-label="Move work.0"]').first()
+    await expect(from).toBeVisible({ timeout: 15_000 })
+
+    const fromBox = await from.boundingBox()
+    const toBox = await to.boundingBox()
+    if (!fromBox || !toBox) throw new Error('The blocks did not render.')
+    await page.mouse.move(fromBox.x + fromBox.width / 2, fromBox.y + fromBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(toBox.x + toBox.width / 2, toBox.y + toBox.height / 2, { steps: 10 })
+    await page.mouse.up()
+
+    await expect(page.getByLabel('Role').first()).toHaveValue('Older Job')
+  })
+
+  test('the paper size follows the toolbar', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await revealPreview(page)
+
+    const letter = page.getByRole('group', { name: 'Paper size' }).getByRole('button', {
+      name: 'Letter',
+    })
+    // Letter is the default, being what North American applications expect.
+    await expect(letter).toHaveAttribute('aria-pressed', 'true')
+
+    await page
+      .getByRole('group', { name: 'Paper size' })
+      .getByRole('button', { name: 'A4' })
+      .click()
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await expect(letter).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
 test.describe('import and export', () => {
   test('importing a PDF fills the form and reports what was read', async ({ page, request }) => {
     const pdf = Buffer.from(

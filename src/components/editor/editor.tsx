@@ -5,15 +5,18 @@ import { useForm, useWatch } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { loadDraft, saveDraft, type Draft } from '@/lib/editor/draft'
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
+import { moveEntry, moveSection } from '@/lib/editor/rearrange'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { emptyDocument, emptyProfile } from '@/lib/editor/starter'
 import type { ResumeDocument } from '@/lib/resume/document'
+import { PAPERS, type PaperId } from '@/lib/resume/typography'
 import { profile as profileSchema, type Profile } from '@/lib/resume/profile'
 import type { ParseReport } from '@/lib/parse/parse'
 import { DocumentControls } from './document-controls'
-import { Button } from './fields'
+import { Button, Segmented } from './fields'
 import { ImportReport } from './import-report'
 import { Preview } from './preview'
+import type { RearrangeMode } from './rearrange-overlay'
 import { ProfileForm, formBlockTitles } from './profile-form'
 import { SectionIndex } from './section-index'
 
@@ -34,6 +37,7 @@ export function Editor() {
   )
   const [pane, setPane] = useState<Pane>('content')
   const [showPreview, setShowPreview] = useState(false)
+  const [rearrange, setRearrange] = useState<RearrangeMode | null>(null)
   const [report, setReport] = useState<ParseReport | null>(null)
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
@@ -90,8 +94,18 @@ export function Editor() {
       // the same content typeset differently can gain or lose a page. So the
       // document is compiled once to find out, rather than reacting to the
       // preview's own compile from inside an effect.
-      const pages = await compiledPageCount(result.profile, document)
-      if (pages > document.options.maxPages) {
+      // The file already told us what paper it was set on; asking again is
+      // asking a question that has been answered.
+      const withPaper = result.report.paper
+        ? {
+            ...document,
+            typography: { ...document.typography, paper: result.report.paper },
+          }
+        : document
+      if (withPaper !== document) setDocument(withPaper)
+
+      const pages = await compiledPageCount(result.profile, withPaper)
+      if (pages > withPaper.options.maxPages) {
         setDocument((current) => ({
           ...current,
           options: { ...current.options, maxPages: Math.min(pages, 10) },
@@ -138,6 +152,18 @@ export function Editor() {
       field.scrollIntoView({ block: 'center', behavior: 'smooth' })
       field.focus({ preventScroll: true })
     })
+  }
+
+  /**
+   * A block dragged on the page moves the thing it was drawn from — a section
+   * in the document, or an entry within one of the profile's lists.
+   */
+  function reorder(fromId: string, toId: string) {
+    if (fromId.startsWith('section:')) {
+      setDocument((current) => moveSection(current, fromId, toId))
+      return
+    }
+    form.reset(moveEntry(form.getValues(), fromId, toId), { keepDefaultValues: true })
   }
 
   /** Compiles once to find out how many pages the document runs to. */
@@ -251,8 +277,53 @@ export function Editor() {
           }`}
           aria-label="Preview"
         >
-          <div className="mx-auto w-full max-w-[680px]">
-            <Preview compiled={compiled} onSelectField={focusField} />
+          <div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Segmented
+                label="Paper size"
+                value={document.typography.paper}
+                options={(Object.keys(PAPERS) as PaperId[]).map((id) => ({
+                  value: id,
+                  label: PAPERS[id].label,
+                }))}
+                onChange={(paper) =>
+                  setDocument((current) => ({
+                    ...current,
+                    typography: { ...current.typography, paper },
+                  }))
+                }
+              />
+              <div className="flex items-center gap-2">
+                {rearrange && (
+                  <Segmented
+                    label="What to rearrange"
+                    value={rearrange}
+                    options={[
+                      { value: 'sections', label: 'Sections' },
+                      { value: 'entries', label: 'Entries' },
+                    ]}
+                    onChange={setRearrange}
+                  />
+                )}
+                <Button
+                  variant={rearrange ? 'primary' : 'secondary'}
+                  onClick={() => setRearrange(rearrange ? null : 'entries')}
+                >
+                  {rearrange ? 'Done' : 'Rearrange'}
+                </Button>
+              </div>
+            </div>
+            {rearrange && (
+              <p className="text-muted text-small">
+                Drag a block onto another to swap their order. Relevance is not always chronology.
+              </p>
+            )}
+            <Preview
+              compiled={compiled}
+              onSelectField={focusField}
+              rearrange={rearrange ?? undefined}
+              onReorder={reorder}
+            />
           </div>
         </section>
       </div>

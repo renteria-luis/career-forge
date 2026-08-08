@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { NodeCompiler } from '@myriaddreamin/typst-ts-node-compiler'
+import { NodeCompiler, type NodeTypstDocument } from '@myriaddreamin/typst-ts-node-compiler'
 import type { ResumeDocument } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { buildRenderModel } from './model'
@@ -19,11 +19,27 @@ import { FONT_DIR, assertFontsPresent } from './fonts'
  * code injection waiting to happen, and JSON removes the question entirely.
  */
 
+/** Where a section or an entry landed, in points from the top of its page. */
+export interface LayoutBlock {
+  /** "section:work" for a section, "work.2" for an entry within one. */
+  id: string
+  page: number
+  y: number
+}
+
 export interface CompileResult {
   pdf: Uint8Array
   pageCount: number
   /** True when the document ran past the page limit the user set. */
   overflow: boolean
+  /**
+   * What sits where on the finished page.
+   *
+   * The preview is an image of the document with no structure of its own, so
+   * rearranging on it needs the layout read back out. Typst knows, because it
+   * is what placed everything.
+   */
+  blocks: LayoutBlock[]
 }
 
 export class TypstCompileError extends Error {
@@ -90,5 +106,19 @@ export function compileResume(profile: Profile, doc: ResumeDocument): CompileRes
     pdf: new Uint8Array(pdf),
     pageCount,
     overflow: pageCount > doc.options.maxPages,
+    blocks: readLayout(compiler, document),
+  }
+}
+
+function readLayout(compiler: NodeCompiler, document: NodeTypstDocument): LayoutBlock[] {
+  try {
+    const result = compiler.query(document, { selector: '<cf-layout>', field: 'value' }) as
+      LayoutBlock[][] | undefined
+    // The template emits one metadata element holding the whole list.
+    return result?.[0] ?? []
+  } catch {
+    // A template without markers is still a valid template; it just cannot be
+    // rearranged from the preview.
+    return []
   }
 }

@@ -56,13 +56,19 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { pdf, pageCount, overflow } = compileResume(parsed.data.profile, parsed.data.document)
+    const { pdf, pageCount, overflow, blocks } = compileResume(
+      parsed.data.profile,
+      parsed.data.document,
+    )
     return new NextResponse(pdf as BodyInit, {
       headers: {
         'content-type': 'application/pdf',
         'content-length': String(pdf.length),
         'x-page-count': String(pageCount),
         'x-overflow': String(overflow),
+        // The body is the document itself, so the layout travels beside it.
+        // Ids are ASCII paths and a resume has tens of blocks, not thousands.
+        'x-layout': JSON.stringify(blocks),
         'cache-control': 'no-store',
       },
     })
