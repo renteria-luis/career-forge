@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_SECTIONS, resumeDocument } from '@/lib/resume/document'
 import { sampleProfile } from '@/lib/resume/fixtures'
 import { canSwap, moveEntry, moveSection, parseBlockId, toBands } from './rearrange'
+import { sectionsForProfile } from './starter'
 
 const document = resumeDocument.parse({ id: 'd', sections: DEFAULT_SECTIONS })
 
@@ -109,5 +110,30 @@ describe('toBands', () => {
       'section:work',
       'section:education',
     ])
+  })
+})
+
+describe('sectionsForProfile', () => {
+  it('turns on a section the imported profile has content for', () => {
+    // Parsing Languages correctly and then showing nothing is the same as not
+    // parsing it: the document only renders the sections it lists.
+    const sections = sectionsForProfile({ languages: [{ language: 'Spanish' }] }, document.sections)
+    expect(sections.map((s) => s.id)).toContain('languages')
+  })
+
+  it('leaves a section off when there is nothing in it', () => {
+    const sections = sectionsForProfile({ basics: { name: 'Ana' } }, document.sections)
+    expect(sections.map((s) => s.id)).not.toContain('languages')
+  })
+
+  it('keeps the order the document already had', () => {
+    const reordered = [...document.sections].reverse()
+    const sections = sectionsForProfile({ awards: [{ title: 'Prize' }] }, reordered)
+    expect(sections.slice(0, reordered.length)).toEqual(reordered)
+    expect(sections.at(-1)?.id).toBe('awards')
+  })
+
+  it('returns the same array when nothing needs adding', () => {
+    expect(sectionsForProfile({}, document.sections)).toBe(document.sections)
   })
 })
