@@ -63,15 +63,12 @@ export const FONT_IDS = Object.keys(FONTS) as [FontId, ...FontId[]]
  */
 export const FONT_SIZE_MIN = 9.5
 export const FONT_SIZE_MAX = 12
-export const FONT_SIZE_DEFAULT = 10.5
+export const FONT_SIZE_DEFAULT = 10
 
 /**
  * Page margin in CSS pixels, the unit people already have a feel for. One px is
  * exactly 0.75pt, so this converts to a physical size without rounding.
  *
- * The floor is deliberately lower than any printer can reproduce — most clip
- * below about 20px — because it is the author's document and a screen-only PDF
- * has no such limit.
  */
 /**
  * Page sizes. Letter is the default because this is aimed first at people
@@ -87,7 +84,12 @@ export const PAPERS = {
 export type PaperId = keyof typeof PAPERS
 export const PAPER_IDS = Object.keys(PAPERS) as [PaperId, ...PaperId[]]
 
-export const MARGIN_MIN = 0.5
+/**
+ * The floor is what a printer can actually reproduce. Below about 20px the
+ * text runs into the region most printers clip, and a resume is a document
+ * people print.
+ */
+export const MARGIN_MIN = 20
 export const MARGIN_MAX = 120
-export const MARGIN_STEP = 0.5
-export const MARGIN_DEFAULT = 64
+export const MARGIN_STEP = 1
+export const MARGIN_DEFAULT = 30
