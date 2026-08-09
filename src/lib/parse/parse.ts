@@ -113,16 +113,29 @@ function splitColumns(text: string): { left: string; date?: DateRange } {
 
 /** Splits a heading line into a title and whatever follows a separator. */
 function splitTitle(text: string): { title?: string; subtitle?: string } {
-  const separator = /\s+(?:—|–|\||·|@|,\s|\bat\b|\ben\b)\s+/i.exec(text)
-  if (!separator) return { title: text.trim() || undefined }
-  return {
-    title: text.slice(0, separator.index).trim() || undefined,
-    subtitle:
-      text
-        .slice(separator.index + separator[0].length)
-        .replace(/^[|·—–,]\s*/, '')
-        .trim() || undefined,
+  /**
+   * A plain hyphen is in this list, and it is the reason for the loop.
+   *
+   * "Graduate Certificate - Fanshawe College, London, ON, Canada" is how most
+   * resumes write a degree, and without the hyphen nothing split the line —
+   * the qualification, the institution and the place all landed in the field
+   * of study together. But a hyphen is also how a date range is written, and
+   * a date that was never set in its own column is still sitting in this line.
+   * So a hyphen only separates when what follows it is not a date; every other
+   * separator is unambiguous and splits at the first one found.
+   */
+  const separators = /\s+(?:—|–|-|\||·|@|,\s|\bat\b|\ben\b)\s+/gi
+
+  for (const match of text.matchAll(separators)) {
+    const after = text.slice(match.index + match[0].length)
+    if (match[0].trim() === '-' && parseDateRange(after)) continue
+    return {
+      title: text.slice(0, match.index).trim() || undefined,
+      subtitle: after.replace(/^[|·—–,]\s*/, '').trim() || undefined,
+    }
   }
+
+  return { title: text.trim() || undefined }
 }
 
 interface RawEntry {
