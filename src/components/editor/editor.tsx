@@ -162,8 +162,8 @@ export function Editor() {
    * want to change means scrolling the form hunting for it. Clicking the line
    * itself is the shorter route, and the text is enough to identify the field.
    */
-  function focusField(clicked: string) {
-    const path = findField(buildFieldIndex(values), clicked)
+  function focusField(clicked: string, at: number) {
+    const path = findField(buildFieldIndex(values), clicked, at)
     if (!path) return
 
     setPane('content')
