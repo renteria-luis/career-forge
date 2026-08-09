@@ -59,6 +59,12 @@
  * heading stops announcing itself, and much larger it competes with the name.
  */
 #let heading-size = (page-opts.size + 1) * 1pt
+/**
+ * The headline under the name, one point below where it was. It sat a shade
+ * above body size and read as a second title competing with the name; below it,
+ * it reads as the caption to the name that it is.
+ */
+#let headline-size = (page-opts.size * 1.02 - 1) * 1pt
 /** Between the last line of a section and the next section's heading. */
 #let gap-section = 1.3em * d
 
@@ -120,9 +126,13 @@
       #h(1fr)
       #text(size: 0.92em, weight: 700, item.at("meta", default: ""))
     ]
-    #if "subtitle" in item [
+    // The employer and where the job was on the left; how it was worked on the
+    // right, directly under the dates so the two align in one column.
+    #if "subtitle" in item or "subtitleMeta" in item [
       #linebreak()
-      #text(style: "italic", item.subtitle)
+      #text(style: "italic", item.at("subtitle", default: ""))
+      #h(1fr)
+      #text(style: "italic", size: 0.92em, item.at("subtitleMeta", default: ""))
     ]
     // The stack a project was built with belongs with its name, not trailing
     // after the bullets where it reads as an afterthought.
@@ -175,7 +185,7 @@
   #block(below: 0pt)[#text(size: 1.95em, weight: 700, data.name)]
 
   #if "headline" in data and data.headline != none [
-    #block(above: gap-paragraph, below: 0pt)[#text(size: 1.02em, data.headline)]
+    #block(above: gap-paragraph, below: 0pt)[#text(size: headline-size, data.headline)]
   ]
 
   #if data.contacts.len() > 0 [
@@ -203,7 +213,7 @@
     ]
   ] else if section.layout == "joined" [
     #block(above: 0pt, below: 0pt)[
-      #section.entries.map(joined-entry).join([ #h(0.3em)#text(fill: luma(140))[|]#h(0.3em) ])
+      #section.entries.map(joined-entry).join([,#h(0.3em)])
     ]
   ] else [
     #for (i, item) in section.entries.enumerate() [

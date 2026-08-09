@@ -32,6 +32,7 @@ describe('extractLines', () => {
       'PROJECTS',
       'EDUCATION',
       'SKILLS',
+      'LANGUAGES',
     ])
   })
 
@@ -56,7 +57,7 @@ describe('extractLines', () => {
   })
 
   it('preserves accented characters', () => {
-    expect(lines).toContain('Universidad Nacional de Ingeniería')
+    expect(lines).toContain('Universidad Nacional de Ingeniería, Lima, Peru')
   })
 
   it('keeps bullet text intact', () => {
