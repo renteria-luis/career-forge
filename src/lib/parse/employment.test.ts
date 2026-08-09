@@ -47,6 +47,41 @@ describe('splitEmployer', () => {
     })
   })
 
+  it('reads an arrangement in brackets behind the place', () => {
+    // "Nombre Empresa | Peru (Hybrid)" used to file the brackets and all as
+    // the location, losing the modality inside it.
+    expect(splitEmployer('Nombre Empresa | Peru (Hybrid)')).toEqual({
+      name: 'Nombre Empresa',
+      location: 'Peru',
+      arrangement: 'hybrid',
+    })
+  })
+
+  it('reads brackets behind a place written with a comma', () => {
+    expect(splitEmployer('Acme | Lima, Peru (Remote)')).toEqual({
+      name: 'Acme',
+      location: 'Lima, Peru',
+      arrangement: 'remote',
+    })
+  })
+
+  it('reads brackets on the employer when there is no place', () => {
+    expect(splitEmployer('Acme (On-site)')).toEqual({
+      name: 'Acme',
+      location: undefined,
+      arrangement: 'on-site',
+    })
+  })
+
+  it('leaves brackets alone when they are not an arrangement', () => {
+    // Plenty of employers carry brackets, and none of that is a modality.
+    expect(splitEmployer('Acme | Lima, Peru (LATAM)')).toEqual({
+      name: 'Acme',
+      location: 'Lima, Peru (LATAM)',
+      arrangement: undefined,
+    })
+  })
+
   it('accepts the spellings people actually use for on-site', () => {
     for (const written of ['On-site', 'on site', 'Onsite', 'In-office']) {
       expect(splitEmployer(`Acme | Lima | ${written}`).arrangement).toBe('on-site')

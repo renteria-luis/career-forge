@@ -76,6 +76,19 @@ export function splitEmployer(line?: string): Employment {
       arrangement ??= whole
       continue
     }
+
+    // "Peru (Hybrid)" — the arrangement in brackets behind the place. Without
+    // this the brackets and all became the location, and the modality was lost
+    // inside it.
+    const bracketed = /^(.*?)\s*[([]([^)\]]+)[)\]]\s*$/.exec(segment)
+    const inside = bracketed ? readArrangement(bracketed[2]) : undefined
+    if (bracketed && inside) {
+      arrangement ??= inside
+      const before = bracketed[1].trim()
+      if (before) rest.push(before)
+      continue
+    }
+
     if (tail) {
       arrangement ??= tail
       rest.push(parts.slice(0, -1).join(', '))

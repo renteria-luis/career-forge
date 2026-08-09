@@ -153,6 +153,35 @@ function isBareUrl(text: string): boolean {
 }
 
 /**
+ * Pulls an address out of a written list of tools.
+ *
+ * "Ledger | Python, Pandas | github.com/ana/ledger" puts the repository on the
+ * title line beside the stack, so reading the whole tail as keywords files the
+ * link as a tool — and it prints as one.
+ *
+ * A domain on its own is only taken when it carries a path, a scheme or a
+ * "www.", or when it ends in .com. "socket.io" and "ASP.NET" are libraries
+ * whose names happen to end in a top-level domain, and filing either as a link
+ * loses a real skill; a link left among the tools is one the user can see and
+ * move. The error is taken in the direction that is visible.
+ */
+function takeAddress(keywords: string[]): { keywords: string[]; url?: string } {
+  const isAddress = (text: string) =>
+    isBareUrl(text) &&
+    (/^https?:\/\//i.test(text) ||
+      /^www\./i.test(text) ||
+      text.includes('/') ||
+      /\.com$/i.test(text))
+
+  const found = keywords.find(isAddress)
+  if (!found) return { keywords }
+  return {
+    keywords: keywords.filter((keyword) => keyword !== found),
+    url: /^https?:/i.test(found) ? found : `https://${found}`,
+  }
+}
+
+/**
  * Groups a section's lines into entries.
  *
  * A date or a bold line opens a new entry; bullets attach to the one above.
@@ -593,18 +622,23 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
       })
       break
     case 'projects':
-      profile.projects = entries.map((e, i) => ({
-        name: e.title,
+      profile.projects = entries.map((e, i) => {
         // "Pipeline | Python, Pandas, SQL" puts the stack after a pipe on the
         // title line. Read as a description it becomes a sentence that is not
-        // one; read as keywords it is what it actually is.
-        keywords: e.subtitle ? splitKeywords(e.subtitle) : undefined,
-        description: dated[i].summary,
-        highlights: dated[i].highlights,
-        startDate: dated[i].startDate,
-        endDate: dated[i].endDate,
-        url: e.url,
-      }))
+        // one; read as keywords it is what it actually is — and the repository
+        // written after it is a link rather than one more tool.
+        const { keywords, url } = takeAddress(e.subtitle ? splitKeywords(e.subtitle) : [])
+        return {
+          name: e.title,
+          keywords: keywords.length > 0 ? keywords : undefined,
+          description: dated[i].summary,
+          highlights: dated[i].highlights,
+          startDate: dated[i].startDate,
+          endDate: dated[i].endDate,
+          // A link on its own line under the entry wins: it was unambiguous.
+          url: e.url ?? url,
+        }
+      })
       break
     case 'certificates':
       profile.certificates = entries.map((e) => ({
