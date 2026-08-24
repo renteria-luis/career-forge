@@ -244,6 +244,78 @@ export interface Place {
 }
 
 /**
+ * Words that end a company's name. The part before one of them is part of the
+ * name too, which is what stops "Acme, Inc., Toronto, ON" giving up "Inc." as
+ * a city.
+ */
+const NAME_SUFFIXES = new Set([
+  'inc',
+  'llc',
+  'ltd',
+  'limited',
+  'corp',
+  'corporation',
+  'co',
+  'company',
+  'gmbh',
+  'ag',
+  'sa',
+  'sas',
+  'srl',
+  'bv',
+  'nv',
+  'plc',
+  'pty',
+  'llp',
+  'university',
+  'college',
+])
+
+/** A country or a state we recognise by name or by code. */
+function isKnownPlaceWord(part: string): boolean {
+  const lower = part.toLowerCase()
+  if (COUNTRY_ALIASES.has(lower) || COUNTRY_NAMES.has(lower)) return true
+  const code = part.toUpperCase()
+  return code.length === 2 && (SUBDIVISIONS.has(code) || COUNTRY_CODES.has(code))
+}
+
+/** Could stand between a city and its country — so not a digit and not "Inc.". */
+function couldBePlacePart(part: string): boolean {
+  const bare = part.toLowerCase().replace(/\./g, '').trim()
+  return part.length > 0 && part.length <= 30 && !/\d/.test(part) && !NAME_SUFFIXES.has(bare)
+}
+
+/**
+ * Cuts a place off the end of a line that also carries a name.
+ *
+ * "Universidad Nacional de Ingeniería, Lima, Peru" is an institution and a
+ * place written with the same comma, and only knowing that Peru is a country
+ * says where one ends. So the split happens only when the last part is a
+ * country or a state we recognise, and it stops early at a word that ends a
+ * company name. A line with no recognisable place at the end is left whole,
+ * which is the wrong answer in a way the user can see rather than a name
+ * quietly cut in half.
+ */
+export function splitTrailingPlace(text: string): { head?: string; place?: string } {
+  const parts = text
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const whole = text.trim() || undefined
+  if (parts.length < 2 || !isKnownPlaceWord(parts.at(-1)!)) return { head: whole }
+
+  // Reach back for the city in front of the country, and no further.
+  let take = 1
+  for (let size = 2; size <= Math.min(3, parts.length - 1); size++) {
+    if (!parts.slice(-size, -1).every(couldBePlacePart)) break
+    take = size
+  }
+
+  const head = parts.slice(0, -take).join(', ')
+  return head ? { head, place: parts.slice(-take).join(', ') } : { head: whole }
+}
+
+/**
  * Reads a place. The country is only split off when it is recognisable;
  * otherwise the whole string stays as the city, because "London, ON" is a
  * complete answer to "where are you" and inventing a country from it is not.

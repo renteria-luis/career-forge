@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { loadPdfjs } from '@/lib/parse/pdfjs'
 import type { CompiledPdf } from '@/lib/editor/use-compiled-pdf'
-import { RearrangeOverlay, type RearrangeMode } from './rearrange-overlay'
+import { RearrangeOverlay, useBlockDrag, type RearrangeMode } from './rearrange-overlay'
 
 /**
  * Draws the compiled resume.
@@ -39,8 +39,11 @@ export function Preview({
   onReorder,
 }: {
   compiled: CompiledPdf
-  /** Called with the text under a click, so the editor can find its field. */
-  onSelectField?: (text: string) => void
+  /**
+   * Called with the text under a click and how far along it the pointer was,
+   * from 0 to 1, so the editor can find the field it came from.
+   */
+  onSelectField?: (text: string, at: number) => void
   /** When set, blocks can be dragged into a new order on the page. */
   rearrange?: RearrangeMode
   onReorder?: (fromId: string, toId: string) => void
@@ -48,6 +51,8 @@ export function Preview({
   const containerRef = useRef<HTMLDivElement>(null)
   const [pages, setPages] = useState<RenderedPage[]>([])
   const [width, setWidth] = useState(0)
+  // One drag, shared by every page, so a block can be dropped on the other one.
+  const drag = useBlockDrag(onReorder ?? (() => {}))
 
   useEffect(() => {
     const element = containerRef.current
@@ -110,7 +115,15 @@ export function Preview({
 
       // Swapped in one go, so the old pages stay visible until these are ready.
       if (!cancelled) setPages(rendered)
-    })()
+    })().catch((error: unknown) => {
+      // Destroying the task to make way for a newer PDF rejects whatever it
+      // was drawing. That is this effect doing its job, not a failure — but
+      // unhandled it reached the browser as an uncaught rejection, which in
+      // development puts Next's error overlay over the page on every compile
+      // that lands mid-render.
+      if (cancelled || (error as { name?: string })?.name === 'RenderingCancelledException') return
+      throw error
+    })
 
     return () => {
       cancelled = true
@@ -139,7 +152,7 @@ export function Preview({
                   pageNumber={index + 1}
                   pageHeights={pages.map((page) => page.heightPt)}
                   mode={rearrange}
-                  onReorder={onReorder}
+                  drag={drag}
                 />
               ) : null
             }
@@ -161,7 +174,7 @@ function CanvasFrame({
   page: RenderedPage
   number: number
   total: number
-  onSelectField?: (text: string) => void
+  onSelectField?: (text: string, at: number) => void
   overlay?: React.ReactNode
 }) {
   const holder = useRef<HTMLDivElement>(null)
@@ -190,7 +203,12 @@ function CanvasFrame({
         .filter((b) => y >= b.top && y <= b.bottom)
         .sort((a, b) => Math.abs(x - a.left) - Math.abs(x - b.left))[0]
 
-    if (hit) onSelectField(hit.str)
+    if (!hit) return
+    // Where along the run the pointer landed. A run is often several fields at
+    // once — an employer and the place beside it, or both ends of a date range
+    // — and this is the only thing that says which of them was meant.
+    const span = hit.right - hit.left
+    onSelectField(hit.str, span > 0 ? (x - hit.left) / span : 0)
   }
 
   return (

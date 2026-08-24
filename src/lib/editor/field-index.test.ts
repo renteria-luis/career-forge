@@ -86,3 +86,89 @@ describe('dates', () => {
     expect(findField(index, 'Jun 2024')).toBe('work.0.endDate')
   })
 })
+
+describe('sections the index used to skip', () => {
+  it('finds the field a language came from', () => {
+    // Languages were not indexed at all, so clicking one on the page matched
+    // nothing and the click was silently dropped.
+    const index = buildFieldIndex({
+      languages: [
+        { language: 'Spanish', fluency: 'Native' },
+        { language: 'English', fluency: 'Professional' },
+      ],
+    })
+    expect(findField(index, 'Spanish')).toBe('languages.0.language')
+    expect(findField(index, 'Native')).toBe('languages.0.fluency')
+    expect(findField(index, 'English')).toBe('languages.1.language')
+  })
+
+  it('finds the field a certificate came from', () => {
+    const index = buildFieldIndex({
+      certificates: [{ name: 'AWS Solutions Architect', issuer: 'Amazon', date: '2025-04' }],
+    })
+    expect(findField(index, 'AWS Solutions Architect')).toBe('certificates.0.name')
+    expect(findField(index, 'Amazon')).toBe('certificates.0.issuer')
+    // Dates print formatted and are stored raw, so the printed form is indexed.
+    expect(findField(index, 'Apr 2025')).toBe('certificates.0.date')
+  })
+})
+
+describe('a run that carries more than one field', () => {
+  // The runs a compiled resume actually draws, taken off the page: the employer
+  // and the place beside it come out as one, and so do both ends of a date.
+  const profile = {
+    work: [
+      {
+        position: 'Senior ML Engineer',
+        name: 'Retail Grid',
+        location: 'Toronto, ON',
+        arrangement: 'remote' as const,
+        startDate: '2023-02',
+      },
+      {
+        position: 'Data Scientist',
+        name: 'Nomad Analytics',
+        startDate: '2021',
+        endDate: '2023-01',
+      },
+    ],
+    languages: [{ language: 'Spanish', fluency: 'Native' }],
+  }
+  const index = buildFieldIndex(profile)
+
+  it('finds the employer at the left of a line it shares with a place', () => {
+    // "Retail Grid" is eleven characters, one short of the reach the last-resort
+    // rule allows, so clicking it used to match nothing at all.
+    expect(findField(index, 'Retail Grid, Toronto, ON', 0.1)).toBe('work.0.name')
+  })
+
+  it('finds the place at the right of that same line', () => {
+    expect(findField(index, 'Retail Grid, Toronto, ON', 0.9)).toBe('work.0.location')
+  })
+
+  it('finds the language behind the colon the template sets after it', () => {
+    // The run is "Spanish:", and the field is "Spanish".
+    expect(findField(index, 'Spanish:', 0.5)).toBe('languages.0.language')
+    expect(findField(index, 'Native', 0.5)).toBe('languages.0.fluency')
+  })
+
+  it('tells the two ends of a date range apart by where it was clicked', () => {
+    expect(findField(index, '2021 - Jan 2023', 0.1)).toBe('work.1.startDate')
+    expect(findField(index, '2021 - Jan 2023', 0.9)).toBe('work.1.endDate')
+  })
+
+  it('reaches the end date through the word standing in for it', () => {
+    // An open range prints "Present", and that is the field that would close it.
+    expect(findField(index, 'Feb 2023 - Present', 0.9)).toBe('work.0.endDate')
+  })
+
+  it('finds how the job was worked', () => {
+    expect(findField(index, 'Remote', 0.5)).toBe('work.0.arrangement')
+  })
+
+  it('still answers without a position', () => {
+    // Older callers pass none, and the whole run is still the first thing tried.
+    expect(findField(index, 'Senior ML Engineer')).toBe('work.0.position')
+    expect(findField(index, 'Spanish:')).toBe('languages.0.language')
+  })
+})

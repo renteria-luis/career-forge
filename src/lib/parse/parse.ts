@@ -1,6 +1,8 @@
 import type { StandardSectionId } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { parseDateRange, type DateRange } from './dates'
+import { splitEmployer } from './employment'
+import { splitKeywords } from '@/lib/resume/keywords'
 import { COLUMN_BREAK, type ExtractedDocument, type TextLine } from './extract'
 import { findPlace } from './location'
 import { bodyTextSize, detectSections } from './sections'
@@ -57,13 +59,6 @@ const LABEL_MAX_CHARS = 40
 /** Longest an employer or institution name realistically runs. */
 const NAME_MAX_CHARS = 60
 
-function splitKeywords(text: string): string[] {
-  return text
-    .split(/[,;·|]/)
-    .map((keyword) => keyword.trim())
-    .filter(Boolean)
-}
-
 /**
  * How much further right a line must sit to count as a wrapped continuation
  * rather than a new line of its own. Hanging indents are several points; this
@@ -118,21 +113,43 @@ function splitColumns(text: string): { left: string; date?: DateRange } {
 
 /** Splits a heading line into a title and whatever follows a separator. */
 function splitTitle(text: string): { title?: string; subtitle?: string } {
-  const separator = /\s+(?:—|–|\||·|@|,\s|\bat\b|\ben\b)\s+/i.exec(text)
-  if (!separator) return { title: text.trim() || undefined }
-  return {
-    title: text.slice(0, separator.index).trim() || undefined,
-    subtitle:
-      text
-        .slice(separator.index + separator[0].length)
-        .replace(/^[|·—–,]\s*/, '')
-        .trim() || undefined,
+  /**
+   * A plain hyphen is in this list, and it is the reason for the loop.
+   *
+   * "Graduate Certificate - Fanshawe College, London, ON, Canada" is how most
+   * resumes write a degree, and without the hyphen nothing split the line —
+   * the qualification, the institution and the place all landed in the field
+   * of study together. But a hyphen is also how a date range is written, and
+   * a date that was never set in its own column is still sitting in this line.
+   * So a hyphen only separates when what follows it is not a date; every other
+   * separator is unambiguous and splits at the first one found.
+   */
+  const separators = /\s+(?:—|–|-|\||·|@|,\s|\bat\b|\ben\b)\s+/gi
+
+  for (const match of text.matchAll(separators)) {
+    const after = text.slice(match.index + match[0].length)
+    if (match[0].trim() === '-' && parseDateRange(after)) continue
+    return {
+      title: text.slice(0, match.index).trim() || undefined,
+      subtitle: after.replace(/^[|·—–,]\s*/, '').trim() || undefined,
+    }
   }
+
+  return { title: text.trim() || undefined }
 }
 
 interface RawEntry {
   title?: string
   subtitle?: string
+  /**
+   * The subtitle line as it was set, columns and all.
+   *
+   * `subtitle` is the left column flattened, which is what an issuer or a
+   * publisher wants. A job needs the rest of the line too: the template
+   * right-aligns how the job was worked against the employer, and reading only
+   * the left column threw that away.
+   */
+  subtitleLine?: string
   startDate?: string
   endDate?: string
   summary?: string
@@ -146,6 +163,35 @@ function isBareUrl(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed === '' || /\s/.test(trimmed)) return false
   return new RegExp(`^(?:${URL.source})$`, 'i').test(trimmed)
+}
+
+/**
+ * Pulls an address out of a written list of tools.
+ *
+ * "Ledger | Python, Pandas | github.com/ana/ledger" puts the repository on the
+ * title line beside the stack, so reading the whole tail as keywords files the
+ * link as a tool — and it prints as one.
+ *
+ * A domain on its own is only taken when it carries a path, a scheme or a
+ * "www.", or when it ends in .com. "socket.io" and "ASP.NET" are libraries
+ * whose names happen to end in a top-level domain, and filing either as a link
+ * loses a real skill; a link left among the tools is one the user can see and
+ * move. The error is taken in the direction that is visible.
+ */
+function takeAddress(keywords: string[]): { keywords: string[]; url?: string } {
+  const isAddress = (text: string) =>
+    isBareUrl(text) &&
+    (/^https?:\/\//i.test(text) ||
+      /^www\./i.test(text) ||
+      text.includes('/') ||
+      /\.com$/i.test(text))
+
+  const found = keywords.find(isAddress)
+  if (!found) return { keywords }
+  return {
+    keywords: keywords.filter((keyword) => keyword !== found),
+    url: /^https?:/i.test(found) ? found : `https://${found}`,
+  }
 }
 
 /**
@@ -252,9 +298,10 @@ function groupEntries(rawLines: TextLine[], bodySize: number): RawEntry[] {
     }
 
     if (!current) current = { highlights: [] }
-    // The line under a job title is the employer, and anything right-aligned
-    // beside it is the location — which the standard has no field for, so only
-    // the employer is kept.
+    // The line under a job title is the employer, with anything right-aligned
+    // beside it — where the job was, or how it was worked. Only the left column
+    // decides whether this reads as a name at all; the whole line is kept so
+    // the right of it can be read for the fields that now exist.
     const [firstColumn] = text.split(COLUMN_BREAK)
     const name = flatten(firstColumn)
     /**
@@ -265,6 +312,7 @@ function groupEntries(rawLines: TextLine[], bodySize: number): RawEntry[] {
     const looksLikeName = name.length <= NAME_MAX_CHARS && !/[.;]$/.test(name)
     if (!current.subtitle && current.highlights.length === 0 && !current.summary && looksLikeName) {
       current.subtitle = name
+      current.subtitleLine = text
     } else {
       const line = flatten(text)
       current.summary = current.summary ? `${current.summary} ${line}` : line
@@ -326,27 +374,64 @@ function toKeywordList(lines: TextLine[]): KeywordItem[] {
 }
 
 /**
- * Languages are written as a run on one line — "English (advanced) | Spanish
- * (native)" — or one per line with a label. Either way each language is its own
- * entry, and the level rides in brackets or after a colon.
+ * Reads one language and the level beside it.
+ *
+ * Every shape a resume writes it in: "Spanish: Native", "Spanish (Native)",
+ * "Spanish [C2]", "Spanish - Native", or the language on its own.
  */
-function toLanguages(lines: TextLine[]): { language?: string; fluency?: string }[] {
-  const languages: { language?: string; fluency?: string }[] = []
+function toLanguage(text: string): { language?: string; fluency?: string } | undefined {
+  const item = text.trim()
+  if (item === '') return undefined
 
-  for (const item of toKeywordList(lines)) {
-    // "Spanish: Native" arrives already split into a name and its level.
-    if (item.name && item.keywords?.length) {
-      languages.push({ language: item.name, fluency: item.keywords.join(', ') })
-      continue
-    }
-    for (const entry of item.keywords ?? (item.name ? [item.name] : [])) {
-      const bracketed = /^(.*?)\s*[([]([^)\]]+)[)\]]\s*$/.exec(entry)
-      if (bracketed) languages.push({ language: bracketed[1].trim(), fluency: bracketed[2].trim() })
-      else languages.push({ language: entry })
+  const bracketed = /^(.*?)\s*[([]([^)\]]+)[)\]]\s*$/.exec(item)
+  if (bracketed) return { language: bracketed[1].trim(), fluency: bracketed[2].trim() }
+
+  const colon = item.indexOf(':')
+  if (colon > 0) {
+    return {
+      language: item.slice(0, colon).trim(),
+      fluency: item.slice(colon + 1).trim() || undefined,
     }
   }
 
-  return languages.filter((entry) => entry.language)
+  // Spaces are required around the dash: a language can carry a hyphen, and
+  // "Serbo-Croatian" is one name rather than a level.
+  const dashed = /^(.*?)\s+[-–—]\s+(.*)$/.exec(item)
+  if (dashed) return { language: dashed[1].trim(), fluency: dashed[2].trim() }
+
+  return { language: item }
+}
+
+/**
+ * Languages, however they are laid out.
+ *
+ * They arrive run together on one line — "English: Advanced, Spanish: Native"
+ * or "English (advanced) | Spanish (native)" — or one per line as bullets. Each
+ * piece is its own language either way.
+ *
+ * They used to be read through the skills reader, which is built for a line
+ * like "Machine learning: PyTorch, scikit-learn": one label, then a list that
+ * belongs to it. Applied to languages that makes the first language the label
+ * and everything after it the level, so "English: Advanced, Spanish: Native,
+ * French: Basic" came back as English with a fluency of "Advanced, Spanish:
+ * Native, French: Basic". Languages are a list of pairs, not a labelled list,
+ * and they need their own reader.
+ */
+export function toLanguages(lines: TextLine[]): { language?: string; fluency?: string }[] {
+  const languages: { language?: string; fluency?: string }[] = []
+
+  for (const line of lines) {
+    const text = flatten(line.text.replace(BULLET, ''))
+    if (text === '') continue
+    // splitKeywords knows the separators a written list uses and leaves what is
+    // inside brackets alone, so "Spanish (Native, C2)" stays one language.
+    for (const piece of splitKeywords(text)) {
+      const entry = toLanguage(piece)
+      if (entry?.language) languages.push(entry)
+    }
+  }
+
+  return languages
 }
 
 /**
@@ -518,7 +603,11 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
 
   switch (id) {
     case 'work':
-      profile.work = entries.map((e, i) => ({ position: e.title, name: e.subtitle, ...dated[i] }))
+      profile.work = entries.map((e, i) => {
+        // The employer line carries where the job was and how it was worked.
+        const { name, location, arrangement } = splitEmployer(e.subtitleLine ?? e.subtitle)
+        return { position: e.title, name, location, arrangement, ...dated[i] }
+      })
       break
     case 'volunteer':
       profile.volunteer = entries.map((e, i) => ({
@@ -528,31 +617,41 @@ function assignEntries(profile: Profile, id: StandardSectionId | null, entries: 
       }))
       break
     case 'education':
-      profile.education = entries.map((e, i) => ({
-        area: e.title,
-        institution: e.subtitle,
-        startDate: dated[i].startDate,
-        endDate: dated[i].endDate,
-        // GPA, honours and coursework sit under a degree the way achievements
-        // sit under a job. Written as bullets they arrive as bullets; written as
-        // a paragraph they are still details, not a description of the degree.
-        courses: dated[i].highlights ?? (dated[i].summary ? [dated[i].summary] : undefined),
-        url: e.url,
-      }))
+      profile.education = entries.map((e, i) => {
+        // Same line, same split — "Fanshawe College | London, ON".
+        const { name, location } = splitEmployer(e.subtitleLine ?? e.subtitle)
+        return {
+          area: e.title,
+          institution: name,
+          location,
+          startDate: dated[i].startDate,
+          endDate: dated[i].endDate,
+          // GPA, honours and coursework sit under a degree the way achievements
+          // sit under a job. Written as bullets they arrive as bullets; written as
+          // a paragraph they are still details, not a description of the degree.
+          courses: dated[i].highlights ?? (dated[i].summary ? [dated[i].summary] : undefined),
+          url: e.url,
+        }
+      })
       break
     case 'projects':
-      profile.projects = entries.map((e, i) => ({
-        name: e.title,
+      profile.projects = entries.map((e, i) => {
         // "Pipeline | Python, Pandas, SQL" puts the stack after a pipe on the
         // title line. Read as a description it becomes a sentence that is not
-        // one; read as keywords it is what it actually is.
-        keywords: e.subtitle ? splitKeywords(e.subtitle) : undefined,
-        description: dated[i].summary,
-        highlights: dated[i].highlights,
-        startDate: dated[i].startDate,
-        endDate: dated[i].endDate,
-        url: e.url,
-      }))
+        // one; read as keywords it is what it actually is — and the repository
+        // written after it is a link rather than one more tool.
+        const { keywords, url } = takeAddress(e.subtitle ? splitKeywords(e.subtitle) : [])
+        return {
+          name: e.title,
+          keywords: keywords.length > 0 ? keywords : undefined,
+          description: dated[i].summary,
+          highlights: dated[i].highlights,
+          startDate: dated[i].startDate,
+          endDate: dated[i].endDate,
+          // A link on its own line under the entry wins: it was unambiguous.
+          url: e.url ?? url,
+        }
+      })
       break
     case 'certificates':
       profile.certificates = entries.map((e) => ({

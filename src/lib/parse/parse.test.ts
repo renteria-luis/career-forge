@@ -35,6 +35,7 @@ describe('parseResume round trip', () => {
       'projects',
       'education',
       'skills',
+      'languages',
     ])
   })
 
@@ -50,6 +51,18 @@ describe('parseResume round trip', () => {
     expect(profile.work?.[1]).toMatchObject({ startDate: '2021', endDate: '2023-01' })
   })
 
+  it('recovers where a job was and how it was worked', () => {
+    // The template sets the employer and the place on the left and how the job
+    // was worked right-aligned beside them. The parser used to keep only the
+    // left column, so the arrangement was dropped on every import — including
+    // an import of a resume this app had just produced.
+    expect(profile.work?.[0]).toMatchObject({
+      name: 'Nomad Analytics',
+      location: 'Toronto, ON',
+      arrangement: 'remote',
+    })
+  })
+
   it('recovers bullets as separate highlights', () => {
     expect(profile.work?.[0].highlights).toHaveLength(2)
     expect(profile.work?.[0].highlights?.[0]).toContain('Cut retrieval latency')
@@ -61,6 +74,16 @@ describe('parseResume round trip', () => {
       startDate: '2016',
       endDate: '2020',
     })
+  })
+
+  it('recovers each language and its level separately', () => {
+    // The joined layout sets them run together on one line. Read as a labelled
+    // list, the first language became the label and the whole rest of the line
+    // its level — "English" with a fluency of "Advanced, Spanish: Native".
+    expect(profile.languages).toEqual([
+      { language: 'Spanish', fluency: 'Native' },
+      { language: 'English', fluency: 'Professional' },
+    ])
   })
 
   it('recovers skills as labelled keyword lists', () => {

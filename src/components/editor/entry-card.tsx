@@ -14,44 +14,61 @@ export function EntryCard({
 }: {
   index: number
   total: number
-  title: string
+  /** A node, so it can watch its own field instead of the whole form. */
+  title: ReactNode
   onRemove: () => void
   onMove: (direction: -1 | 1) => void
   children: ReactNode
 }) {
   return (
-    <li className="border-hairline rounded-panel border p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-muted text-micro truncate font-mono uppercase">
-          {title || `Entry ${index + 1}`}
-        </p>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {/* Buttons rather than drag handles: reordering has to work from a
+    <li className="border-hairline rounded-panel border">
+      {/* Open by default. A collapsed entry hides the fields someone came here
+          to fill in, so folding is something they ask for once a list is long
+          enough to be in the way. */}
+      <details open className="group/entry">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4">
+          <p className="text-muted text-micro flex min-w-0 items-center gap-1.5 font-mono uppercase">
+            <span
+              aria-hidden
+              className="inline-block transition-transform group-open/entry:rotate-90"
+            >
+              ›
+            </span>
+            <span className="truncate">{title}</span>
+          </p>
+          {/* A click on any of these reaches the summary, whose default action is
+            to fold the entry. Removing a job should not also fold it. */}
+          <div
+            className="flex shrink-0 items-center gap-0.5"
+            onClick={(event) => event.preventDefault()}
+          >
+            {/* Buttons rather than drag handles: reordering has to work from a
               keyboard and on a phone, and a list this short does not need more. */}
-          <Button
-            variant="quiet"
-            aria-label="Move up"
-            disabled={index === 0}
-            onClick={() => onMove(-1)}
-            className="px-2"
-          >
-            ↑
-          </Button>
-          <Button
-            variant="quiet"
-            aria-label="Move down"
-            disabled={index === total - 1}
-            onClick={() => onMove(1)}
-            className="px-2"
-          >
-            ↓
-          </Button>
-          <Button variant="quiet" aria-label="Remove" onClick={onRemove} className="px-2">
-            ✕
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-col gap-3">{children}</div>
+            <Button
+              variant="quiet"
+              aria-label="Move up"
+              disabled={index === 0}
+              onClick={() => onMove(-1)}
+              className="px-2"
+            >
+              ↑
+            </Button>
+            <Button
+              variant="quiet"
+              aria-label="Move down"
+              disabled={index === total - 1}
+              onClick={() => onMove(1)}
+              className="px-2"
+            >
+              ↓
+            </Button>
+            <Button variant="quiet" aria-label="Remove" onClick={onRemove} className="px-2">
+              ✕
+            </Button>
+          </div>
+        </summary>
+        <div className="flex flex-col gap-3 px-4 pb-4">{children}</div>
+      </details>
     </li>
   )
 }
@@ -62,13 +79,21 @@ export function sectionAnchor(title: string): string {
 }
 
 /** A collapsible group of fields. Collapsed by default keeps the form scannable. */
+/** What a section counts, singular and plural. */
+const UNITS = {
+  entry: ['entry', 'entries'],
+  section: ['section', 'sections'],
+} as const
+
 export function FormSection({
   title,
   count,
+  unit = 'entry',
   children,
 }: {
   title: string
   count?: number
+  unit?: keyof typeof UNITS
   children: ReactNode
 }) {
   return (
@@ -80,7 +105,7 @@ export function FormSection({
       <summary className="text-strong flex cursor-pointer list-none items-center justify-between gap-2 py-4">
         <span className="font-display text-title">{title}</span>
         <span className="text-muted text-micro font-mono">
-          {count !== undefined && `${count} `}
+          {count !== undefined && `${count} ${UNITS[unit][count === 1 ? 0 : 1]} `}
           <span className="inline-block transition-transform group-open:rotate-180">▾</span>
         </span>
       </summary>

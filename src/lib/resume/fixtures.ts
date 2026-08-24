@@ -23,6 +23,8 @@ export const sampleProfile: Profile = {
     {
       name: 'Nomad Analytics',
       position: 'Senior ML Engineer',
+      location: 'Toronto, ON',
+      arrangement: 'remote',
       startDate: '2023-02',
       // No endDate: this is the current role, per the JSON Resume convention.
       highlights: [
@@ -47,6 +49,7 @@ export const sampleProfile: Profile = {
   education: [
     {
       institution: 'Universidad Nacional de Ingeniería',
+      location: 'Lima, Peru',
       area: 'Computer Science',
       studyType: 'BSc',
       startDate: '2016',
@@ -89,5 +92,8 @@ export const sampleDocument: ResumeDocument = {
     showGithub: true,
     showLinkedin: true,
   },
-  sections: DEFAULT_SECTIONS,
+  // Languages is set beyond the defaults on purpose: it is the one section
+  // with the joined layout, so without it here nothing compiled in a test ever
+  // exercised that layout or the parser that has to read it back.
+  sections: [...DEFAULT_SECTIONS, { kind: 'standard', id: 'languages', visible: true }],
 }

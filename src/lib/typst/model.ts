@@ -1,5 +1,6 @@
 import { FONTS, PAPERS } from '@/lib/resume/typography'
 import type { DocumentSection, ResumeDocument, StandardSectionId } from '@/lib/resume/document'
+import { ARRANGEMENT_LABELS } from '@/lib/resume/arrangements'
 import type { Profile } from '@/lib/resume/profile'
 
 /**
@@ -28,6 +29,12 @@ export interface RenderEntry {
   ref?: string
   title?: string
   subtitle?: string
+  /**
+   * Right-aligned on the subtitle's line, under `meta`. How a job was worked
+   * goes here — it belongs beside the employer, not appended to it, so that a
+   * reader's eye finds the dates and the arrangement in the same column.
+   */
+  subtitleMeta?: string
   /** Right-aligned, usually a date range. */
   meta?: string
   summary?: string
@@ -105,6 +112,12 @@ function lines(values?: string[]): string[] | undefined {
   return kept.length > 0 ? kept : undefined
 }
 
+/** Joins the parts of a place onto what it belongs to, skipping the absent. */
+function join(...parts: (string | undefined)[]): string | undefined {
+  const kept = parts.filter((part) => part && part.trim() !== '')
+  return kept.length > 0 ? kept.join(', ') : undefined
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** "2023-02" reads as "Feb 2023"; a year-only date stays a year. */
@@ -166,7 +179,10 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
       return (profile.work ?? []).map((w, i) => ({
         ref: `work.${i}`,
         title: w.position,
-        subtitle: w.name,
+        // The employer and where the job was read as one fact — "Nomad
+        // Analytics, Toronto, ON" — the way an address does.
+        subtitle: join(w.name, w.location),
+        subtitleMeta: w.arrangement ? ARRANGEMENT_LABELS[w.arrangement] : undefined,
         meta: formatRange(w.startDate, w.endDate),
         summary: w.summary,
         highlights: lines(w.highlights),
@@ -186,7 +202,7 @@ function buildStandard(id: StandardSectionId, profile: Profile): RenderEntry[] {
       return (profile.education ?? []).map((e, i) => ({
         ref: `education.${i}`,
         title: [e.studyType, e.area].filter(Boolean).join(', ') || undefined,
-        subtitle: e.institution,
+        subtitle: join(e.institution, e.location),
         meta: formatRange(e.startDate, e.endDate),
         summary: e.score || undefined,
         // GPA, honours and coursework are optional and belong under the entry
