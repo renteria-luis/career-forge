@@ -49,11 +49,43 @@ export async function POST(request: Request) {
     )
   }
 
+  let extracted
   try {
-    const result = parseResume(await extractLines(bytes))
-    return NextResponse.json(result, { headers: { 'cache-control': 'no-store' } })
-  } catch {
-    // Deliberately not including the error: parser failures quote file content.
+    extracted = await extractLines(bytes)
+  } catch (cause) {
+    reportFailure('extract', cause)
     return NextResponse.json({ error: 'That PDF could not be read.' }, { status: 422 })
   }
+
+  try {
+    const result = parseResume(extracted)
+    return NextResponse.json(result, { headers: { 'cache-control': 'no-store' } })
+  } catch (cause) {
+    reportFailure('parse', cause)
+    return NextResponse.json({ error: 'That PDF could not be read.' }, { status: 422 })
+  }
+}
+
+/** Error types that come from broken code rather than from a document. */
+const OUR_FAULT = new Set(['TypeError', 'ReferenceError', 'SyntaxError', 'RangeError'])
+
+/**
+ * Records that a read failed, and nothing about the file that failed.
+ *
+ * A deployment that cannot read any PDF and a person sending a broken one
+ * produce the same 422, and for one release they were the same silence too:
+ * the build shipped without the files pdf.js loads at runtime, so every upload
+ * failed and nothing anywhere said so.
+ *
+ * The type name is enough to tell those apart. pdf.js raises named exceptions
+ * for documents it cannot handle; a plain TypeError or ReferenceError means
+ * this code is broken, and those messages describe our own machinery, so they
+ * are carried too. A message from anything else is not, because §6 of the
+ * engineering guidelines is a legal obligation and parser failures quote file
+ * content.
+ */
+function reportFailure(stage: 'extract' | 'parse', cause: unknown): void {
+  const name = cause instanceof Error ? cause.constructor.name : typeof cause
+  const detail = OUR_FAULT.has(name) ? `: ${(cause as Error).message}` : ''
+  console.error(`import failed at ${stage} (${name})${detail}`)
 }
