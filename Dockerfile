@@ -10,8 +10,11 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+# No BuildKit cache mount for the pnpm store. It only ever helped repeated
+# local builds — no CI runner persists it between runs — and it made the image
+# unbuildable by any builder without BuildKit, which is what plain
+# `docker build` on a hosted builder gives you. Layer caching still applies.
+RUN pnpm install --frozen-lockfile
 
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
