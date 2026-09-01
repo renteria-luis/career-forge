@@ -1,4 +1,7 @@
-import { loadPdfjs } from './pdfjs'
+import type * as PdfjsModule from 'pdfjs-dist'
+import { loadPdfjs, pdfjsAssetUrls } from './pdfjs'
+
+type PdfjsDocument = Awaited<ReturnType<typeof PdfjsModule.getDocument>['promise']>
 
 /**
  * Turns a PDF into positioned lines of text.
@@ -140,7 +143,18 @@ function detectPaper(width: number, height: number): 'a4' | 'letter' | undefined
 export async function extractLines(bytes: Uint8Array): Promise<ExtractedDocument> {
   ensureSumPrecise()
   const pdfjs = await loadPdfjs()
-  const doc = await pdfjs.getDocument({ data: bytes }).promise
+  // The loading task owns the document and its worker, and releasing them is
+  // an explicit call — the preview has always made it, this path never did.
+  // Every upload left one behind, which on the server is per request forever.
+  const task = pdfjs.getDocument({ data: bytes, ...pdfjsAssetUrls() })
+  try {
+    return await readDocument(await task.promise)
+  } finally {
+    await task.destroy()
+  }
+}
+
+async function readDocument(doc: PdfjsDocument): Promise<ExtractedDocument> {
   const lines: TextLine[] = []
   let paper: 'a4' | 'letter' | undefined
 
