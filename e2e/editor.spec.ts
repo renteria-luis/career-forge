@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 
 const status = 'header p.font-mono'
@@ -8,6 +9,12 @@ const status = 'header p.font-mono'
  */
 async function revealPreview(page: import('@playwright/test').Page) {
   const toggle = page.getByRole('button', { name: 'See the preview' })
+  if (await toggle.isVisible()) await toggle.click()
+}
+
+/** The other half of revealPreview, for tests that go back to the fields. */
+async function returnToForm(page: import('@playwright/test').Page) {
+  const toggle = page.getByRole('button', { name: 'Back to editing' })
   if (await toggle.isVisible()) await toggle.click()
 }
 
@@ -736,7 +743,7 @@ test.describe('import and export', () => {
 
     // Visible ones only: a second target is rendered for the narrow layout,
     // where the form is the only pane on screen, and is hidden at this width.
-    const highlight = page.getByText('Drop a PDF to import it').filter({ visible: true })
+    const highlight = page.getByText('Drop a PDF or a resume.json').filter({ visible: true })
     await expect(highlight).toHaveCount(1)
     await expect(highlight).toBeInViewport()
     expect(await contains(pane, highlight)).toBe(true)
@@ -759,9 +766,45 @@ test.describe('import and export', () => {
 
     const download = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Download' }).click(),
+      page.getByRole('button', { name: 'Download PDF', exact: true }).click(),
     ]).then(([event]) => event)
 
     expect(download.suggestedFilename()).toBe('ana-ruiz.pdf')
+  })
+
+  test('saved data comes back with the layout it was saved with', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    // The paper control lives in the preview pane, which is behind a toggle on
+    // a phone. The form has to come back before the fields can be read again.
+    await revealPreview(page)
+    await page.getByRole('button', { name: 'A4', exact: true }).click()
+    await returnToForm(page)
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+
+    const saved = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Save data', exact: true }).click(),
+    ]).then(([event]) => event)
+    expect(saved.suggestedFilename()).toBe('ana-ruiz.json')
+
+    const written = await readFile(await saved.path(), 'utf8')
+    // Valid JSON Resume: the standard's fields at the top level, ours beside them.
+    expect((JSON.parse(written) as { basics: { name: string } }).basics.name).toBe('Ana Ruiz')
+
+    // Wipe the form, then read the file back into it.
+    await page.getByLabel('Full name').fill('')
+    await page.setInputFiles('input[type=file]', {
+      name: 'ana-ruiz.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(written),
+    })
+
+    await expect(page.getByLabel('Full name')).toHaveValue('Ana Ruiz', { timeout: 15_000 })
+    await revealPreview(page)
+    await expect(page.getByRole('button', { name: 'A4', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 })
