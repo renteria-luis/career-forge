@@ -17,7 +17,11 @@ const PALETTE = [
     value: '#a83a26',
     use: 'Validation errors and the smoke detector only. Lit to #f08a72 in dark.',
   },
-  { name: 'confirm', value: '#2f6b46', use: 'Checks that passed.' },
+  {
+    name: 'tick',
+    value: '#2f6b46',
+    use: 'Checks that passed. Lit to #57a878 in dark.',
+  },
 ]
 
 const SCALE = [
