@@ -57,6 +57,15 @@ const MONTH_WORD = Object.keys(MONTHS)
 const NAMED = new RegExp(`\\b(${MONTH_WORD})\\.?\\s+(\\d{4})\\b`, 'i')
 /** "03/2021" or "3-2021" */
 const NUMERIC = /\b(0?[1-9]|1[0-2])[/.-](\d{4})\b/
+/**
+ * "2020-01", year first. Read before the bare year, or the month is dropped and
+ * the whole range collapses to a single year.
+ *
+ * The month is anchored so a plain "2019-2021" cannot match it: a year range
+ * written with a hyphen is far more common on a resume than an ISO date, and
+ * reading the second year as a month would be worse than reading neither.
+ */
+const ISO = /\b((?:19|20)\d{2})-(0[1-9]|1[0-2])\b/
 /** A bare year, but not something that is really a number like "2,019 users". */
 const YEAR = /\b(19|20)\d{2}\b/
 
@@ -71,6 +80,9 @@ export function parseDatePart(input: string): string | undefined {
 
   const named = NAMED.exec(text)
   if (named) return `${named[2]}-${pad(MONTHS[named[1].toLowerCase()])}`
+
+  const iso = ISO.exec(text)
+  if (iso) return `${iso[1]}-${iso[2]}`
 
   const numeric = NUMERIC.exec(text)
   if (numeric) return `${numeric[2]}-${pad(Number(numeric[1]))}`
@@ -93,43 +105,61 @@ export function parseDateRange(line: string): DateRange | undefined {
   // layouts, and job titles sometimes contain years ("Web 2.0 Lead").
   const candidates = findRangeCandidates(line)
 
-  for (const candidate of candidates) {
-    const [rawStart, rawEnd] = splitOnce(candidate, SEPARATOR)
+  for (const { matched, rawStart, rawEnd } of candidates) {
     const startDate = parseDatePart(rawStart)
 
     if (rawEnd !== undefined) {
       const current = PRESENT.test(rawEnd.trim())
       const endDate = current ? undefined : parseDatePart(rawEnd)
       if (startDate && (endDate || current)) {
-        return { startDate, endDate, current, matched: candidate }
+        return { startDate, endDate, current, matched }
       }
     }
 
     if (startDate && rawEnd === undefined) {
-      return { startDate, current: false, matched: candidate }
+      return { startDate, current: false, matched }
     }
   }
 
   return undefined
 }
 
-function splitOnce(input: string, separator: RegExp): [string, string?] {
-  const match = separator.exec(input)
-  if (!match || match.index === 0) return [input]
-  return [input.slice(0, match.index), input.slice(match.index + match[0].length)]
-}
-
 /**
  * Pulls out substrings that could be a range, longest first, so a full
  * "Feb 2023 – Present" is tried before the bare "2023" inside it.
  */
-function findRangeCandidates(line: string): string[] {
+/**
+ * Anything that reads as one end of a range.
+ *
+ * The quarter prefix is recognised but not converted: "Q1" spans three months
+ * and choosing one of them would be a guess, which is exactly what this parser
+ * does not do. Matching it is still worth it, because without it the prefix
+ * stood between the separator and the year and the end of the range was
+ * dropped in silence — "Q1 2020 - Q3 2021" read as 2020 and nothing else.
+ */
+const DATE_TOKEN =
+  `(?:Q[1-4]\\s+)?(?:(?:${MONTH_WORD})\\.?\\s+\\d{4}` +
+  `|(?:19|20)\\d{2}-(?:0[1-9]|1[0-2])\\b` +
+  `|\\b\\d{1,2}[/.-]\\d{4}` +
+  `|\\b(?:19|20)\\d{2}\\b)`
+
+interface Candidate {
+  matched: string
+  rawStart: string
+  rawEnd?: string
+}
+
+function findRangeCandidates(line: string): Candidate[] {
   const pattern = new RegExp(
-    `((?:${MONTH_WORD})\\.?\\s+\\d{4}|\\d{1,2}[/.-]\\d{4}|\\b(?:19|20)\\d{2}\\b)` +
-      `(?:${SEPARATOR.source}` +
-      `((?:${MONTH_WORD})\\.?\\s+\\d{4}|\\d{1,2}[/.-]\\d{4}|\\b(?:19|20)\\d{2}\\b|` +
-      `present|current|now|ongoing|actualidad|actual|presente|hoy))?`,
+    `(${DATE_TOKEN})(?:${SEPARATOR.source}` +
+      `(${DATE_TOKEN}|present|current|now|ongoing|actualidad|actual|presente|hoy))?`,
     'gi',
   )
-  return [...line.matchAll(pattern)].map((m) => m[0]).sort((a, b) => b.length - a.length)
+  // The two ends come from the pattern's own groups rather than from splitting
+  // the match afterwards. Splitting on the separator cut "2020-01" in half at
+  // its own hyphen, which turned an ISO date into the year 2020 and then failed
+  // to read "01" as anything at all.
+  return [...line.matchAll(pattern)]
+    .map((m): Candidate => ({ matched: m[0], rawStart: m[1], rawEnd: m[2] }))
+    .sort((a, b) => b.matched.length - a.matched.length)
 }

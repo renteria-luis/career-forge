@@ -31,6 +31,15 @@ describe('parseDateRange', () => {
     ['01/2020 – 03/2021', '2020-01', '2021-03', false],
     ['Marzo 2020 – Actualidad', '2020-03', undefined, true],
     ['Ene 2018 hasta Dic 2019', '2018-01', '2019-12', false],
+    // Year first. Read as a bare year before, which dropped the month and then
+    // the whole second half of the range with it.
+    ['2020-01 - 2021-03', '2020-01', '2021-03', false],
+    ['2020-01', '2020-01', undefined, false],
+    ['2020-01 – Present', '2020-01', undefined, true],
+    // A quarter spans three months, so no month is invented. Matching the
+    // prefix is still what keeps the end of the range from being dropped.
+    ['Q1 2020 - Q3 2021', '2020', '2021', false],
+    ['Q3 2021', '2021', undefined, false],
   ])('reads %s', (line, start, end, current) => {
     const range = parseDateRange(line)
     expect(range?.startDate).toBe(start)
@@ -50,6 +59,14 @@ describe('parseDateRange', () => {
     expect(range?.startDate).toBe('2022')
     expect(range?.endDate).toBeUndefined()
     expect(range?.current).toBe(false)
+  })
+
+  it('does not read a hyphenated standard number as a date', () => {
+    // "01-2015" sits inside "9001-2015" and used to be read as January 2015,
+    // which put a certification number into a date field.
+    const range = parseDateRange('ISO 9001-2015 certified')
+    expect(range?.startDate).toBe('2015')
+    expect(range?.endDate).toBeUndefined()
   })
 
   it('reports the matched text so callers can strip it from the title', () => {
