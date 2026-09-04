@@ -106,9 +106,13 @@ it removes the most common failure by a wide margin.
 session token or resume content — §6, and this is the rule most easily broken
 by adding one helpful debug line.
 
-**Headers.** A Content-Security-Policy, `Strict-Transport-Security`, and
-`X-Content-Type-Options: nosniff`. The app renders user-supplied resume text;
-CSP is what keeps a stored-XSS bug from becoming a session theft.
+**Headers.** Shipped in `next.config.ts`, with one thing left to do. The
+policy currently allows `'unsafe-inline'` scripts, because Next serves the RSC
+payload as inline script tags and the alternative is a nonce from middleware on
+every request, which gives up static rendering for all seven pages. That trade
+is fine while there is nothing to steal. It stops being fine here: the app
+renders user-supplied resume text, and CSP is what keeps a stored-XSS bug from
+becoming a session theft. Make it nonce-based when sessions exist, not after.
 
 ### Phone verification: designed, not enabled
 
