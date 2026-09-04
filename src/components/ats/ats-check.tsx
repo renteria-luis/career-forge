@@ -113,6 +113,11 @@ export function AtsCheck() {
         type="file"
         accept="application/pdf,.pdf"
         className="sr-only"
+        // Out of the accessibility tree on purpose. The visible control below
+        // carries the name and does the same job, and a screen reader announcing
+        // an unnamed second file button is noise, not an extra route in.
+        tabIndex={-1}
+        aria-hidden="true"
         onChange={(event) => {
           const file = event.target.files?.[0]
           if (file) void run(file)
