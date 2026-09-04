@@ -190,6 +190,11 @@ function matchWhole(index: FieldEntry[], clicked: string): string | undefined {
   const contained = index.filter(
     (entry) =>
       entry.text.length >= MIN_CONTAINED_CHARS &&
+      // A \b-delimited match cannot happen without the plain substring, and
+      // every field carries a different one, so this is the pattern that
+      // cannot be hoisted. Checking the cheap necessary condition first leaves
+      // only the handful of candidates that could match to be compiled.
+      needle.includes(entry.text) &&
       new RegExp(`\\b${escapeRegExp(entry.text)}\\b`).test(needle),
   )
   if (contained.length === 0) return undefined

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { loadPdfjs } from '@/lib/parse/pdfjs'
 import type { CompiledPdf } from '@/lib/editor/use-compiled-pdf'
@@ -131,6 +131,10 @@ export function Preview({
     }
   }, [compiled.bytes, width])
 
+  // One array for the whole list. Built inside the map it was rebuilt for every
+  // page, and each overlay wants the same heights to place a drop against.
+  const pageHeights = useMemo(() => pages.map((page) => page.heightPt), [pages])
+
   return (
     <div ref={containerRef} className="flex w-full flex-col gap-4">
       {pages.length === 0 ? (
@@ -150,7 +154,7 @@ export function Preview({
                 <RearrangeOverlay
                   blocks={compiled.blocks}
                   pageNumber={index + 1}
-                  pageHeights={pages.map((page) => page.heightPt)}
+                  pageHeights={pageHeights}
                   mode={rearrange}
                   drag={drag}
                 />
