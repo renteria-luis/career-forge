@@ -130,7 +130,8 @@ them.
 ## What is still missing before public mode
 
 - A rate limit on `/api/compile`. The route's own comment says so. It is
-  reachable without an account and compiles arbitrary documents.
+  reachable without an account and compiles arbitrary documents. The size
+  ceiling bounds one request; nothing yet bounds their number.
 - A registered domain, mapped to the service. Cloud Run domain mapping and its
   TLS certificate are free.
 - `--min-instances 1`, which leaves the free tier. The allowance is 50 hours of
