@@ -28,6 +28,10 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000
 # the native binding, the bundled fonts and the Typst templates.
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+# Empty today, and kept that way by public/.gitkeep. Removing the last file
+# from it deleted the directory — git does not track empty ones — and this line
+# then failed the image build. A favicon dropped in later is served without
+# touching this file.
 COPY --from=build --chown=node:node /app/public ./public
 
 USER node
