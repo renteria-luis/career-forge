@@ -11,9 +11,9 @@ import type { Check, CheckStatus } from '@/lib/ats/report'
  */
 
 const MARK: Record<CheckStatus, { glyph: string; className: string; label: string }> = {
-  pass: { glyph: '✓', className: 'text-[var(--color-confirm)]', label: 'Passed' },
-  warn: { glyph: '!', className: 'text-[var(--color-flag)]', label: 'Worth checking' },
-  fail: { glyph: '✕', className: 'text-[var(--color-flag)]', label: 'Problem' },
+  pass: { glyph: '✓', className: 'text-confirm', label: 'Passed' },
+  warn: { glyph: '!', className: 'text-flag', label: 'Worth checking' },
+  fail: { glyph: '✕', className: 'text-flag', label: 'Problem' },
 }
 
 export function CheckList({ checks }: { checks: Check[] }) {

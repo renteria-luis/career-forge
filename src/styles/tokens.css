@@ -34,7 +34,11 @@
   --color-correction-lit: #f08a72;
   --color-correction-lit-sunk: #2a1a17;
 
-  --color-confirm: #2f6b46;
+  /* The proofreader's tick: correct as set. Only for checks that passed.
+   * Arranged like the correction red above — the palette holds both instances
+   * and the semantic `confirm` picks one, so the name is free for components. */
+  --color-tick: #2f6b46;
+  --color-tick-lit: #57a878;
 
   /* --- type ---------------------------------------------------------------
    * Newsreader: a reading face with optical sizes. It carries the personality
@@ -99,6 +103,7 @@
   --on-accent: var(--color-paper);
   --flag: var(--color-correction);
   --flag-sunk: var(--color-correction-sunk);
+  --confirm: var(--color-tick);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -113,6 +118,7 @@
     --on-accent: var(--color-ink);
     --flag: var(--color-correction-lit);
     --flag-sunk: var(--color-correction-lit-sunk);
+    --confirm: var(--color-tick-lit);
   }
 }
 
@@ -127,6 +133,7 @@
   --on-accent: var(--color-ink);
   --flag: var(--color-correction-lit);
   --flag-sunk: var(--color-correction-lit-sunk);
+  --confirm: var(--color-tick-lit);
 }
 
 @theme inline {
@@ -140,4 +147,5 @@
   --color-on-accent: var(--on-accent);
   --color-flag: var(--flag);
   --color-flag-sunk: var(--flag-sunk);
+  --color-confirm: var(--confirm);
 }
