@@ -100,6 +100,17 @@ export function Editor() {
   }, [opened])
 
   useEffect(() => {
+    if (!rearrange) return
+    // Escape is what people press to get out of a mode, and until this the only
+    // way back was finding the button that turned it on.
+    const leave = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRearrange(null)
+    }
+    window.addEventListener('keydown', leave)
+    return () => window.removeEventListener('keydown', leave)
+  }, [rearrange])
+
+  useEffect(() => {
     // A drag that ends outside the window, or is abandoned with Escape, never
     // reaches the page handlers — so the highlight would stay lit forever.
     const clear = () => {
@@ -404,7 +415,9 @@ export function Editor() {
                       key={id}
                       role="tab"
                       type="button"
+                      id={`pane-tab-${id}`}
                       aria-selected={pane === id}
+                      aria-controls="pane-panel"
                       onClick={() => setPane(id)}
                       className={`text-small -mb-px border-b-2 px-3 py-2 font-medium capitalize transition-colors ${
                         pane === id
@@ -424,11 +437,15 @@ export function Editor() {
                 )}
                 {report && <ImportReport report={report} onDismiss={() => setReport(null)} />}
 
-                {pane === 'content' ? (
-                  <ProfileForm form={form} sections={document.sections} />
-                ) : (
-                  <DocumentControls document={document} onChange={setDocument} />
-                )}
+                {/* The tabs above named no panel, so "selected" described a
+                    control that pointed at nothing. */}
+                <div role="tabpanel" id="pane-panel" aria-labelledby={`pane-tab-${pane}`}>
+                  {pane === 'content' ? (
+                    <ProfileForm form={form} sections={document.sections} />
+                  ) : (
+                    <DocumentControls document={document} onChange={setDocument} />
+                  )}
+                </div>
               </div>
               {pane === 'content' && <SectionIndex titles={sectionTitles} />}
             </div>
