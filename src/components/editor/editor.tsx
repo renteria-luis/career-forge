@@ -351,13 +351,18 @@ export function Editor() {
     >
       <header className="border-hairline bg-surface z-10 shrink-0 border-b">
         <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-          <p className="font-display text-title text-strong mr-auto">Career Forge</p>
+          <h1 className="font-display text-title text-strong mr-auto">Career Forge</h1>
 
           <input
             ref={fileRef}
             type="file"
             accept="application/pdf,.pdf,application/json,.json"
             className="sr-only"
+            // Out of the accessibility tree on purpose. The visible control below
+            // carries the name and does the same job, and a screen reader announcing
+            // an unnamed second file button is noise, not an extra route in.
+            tabIndex={-1}
+            aria-hidden="true"
             onChange={(event) => {
               const file = event.target.files?.[0]
               if (file) void importFile(file)
@@ -380,7 +385,7 @@ export function Editor() {
 
       {/* Full bleed: a centred container leaves dead strips at the window edge
           where the wheel does nothing, and the edge is where a pointer lands. */}
-      <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
+      <main className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
         <section
           className={`relative min-h-0 flex-1 ${showPreview ? 'hidden lg:block' : ''}`}
           aria-label="Resume content"
@@ -501,7 +506,7 @@ export function Editor() {
             </div>
           </div>
         </section>
-      </div>
+      </main>
 
       <ConfirmDialog
         open={confirmingClear}
