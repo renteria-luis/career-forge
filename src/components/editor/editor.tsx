@@ -7,6 +7,7 @@ import { clearDraft, loadDraft, saveDraft, type Draft } from '@/lib/editor/draft
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
 import { formBlockTitles } from '@/lib/editor/form-blocks'
 import { moveEntry, moveSection } from '@/lib/editor/rearrange'
+import { fromPortableJson, toPortableJson } from '@/lib/editor/portable'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { emptyDocument, emptyProfile, sectionsForProfile, toFormValues } from '@/lib/editor/starter'
 import type { ResumeDocument } from '@/lib/resume/document'
@@ -68,21 +69,35 @@ export function Editor() {
   // Written on a delay so a burst of typing is one write, not one per keystroke.
   const draft = JSON.stringify({ profile: values, document })
   const latestDraft = useRef(draft)
+  /**
+   * What was on screen when the editor opened.
+   *
+   * Nothing is written back while the draft still equals this. Opening the page
+   * and typing nothing used to overwrite storage 400ms later, which is harmless
+   * while the restore works and destroys the only copy of somebody's resume the
+   * day it stops — a draft that fails to parse is dropped, and the empty form
+   * that replaced it was saved over the top before anyone could notice.
+   */
+  const [opened] = useState(() => draft)
 
   useEffect(() => {
     latestDraft.current = draft
+    if (draft === opened) return
     const timer = setTimeout(() => saveDraft(JSON.parse(draft) as Draft), 400)
     return () => clearTimeout(timer)
-  }, [draft])
+  }, [draft, opened])
 
   useEffect(() => {
     // The delay above means a refresh a moment after typing would lose the last
     // edit. pagehide fires on reload, navigation and closing a tab, and is the
     // one event mobile browsers reliably deliver before discarding a page.
-    const flush = () => saveDraft(JSON.parse(latestDraft.current) as Draft)
+    const flush = () => {
+      if (latestDraft.current === opened) return
+      saveDraft(JSON.parse(latestDraft.current) as Draft)
+    }
     window.addEventListener('pagehide', flush)
     return () => window.removeEventListener('pagehide', flush)
-  }, [])
+  }, [opened])
 
   useEffect(() => {
     // A drag that ends outside the window, or is abandoned with Escape, never
@@ -98,6 +113,44 @@ export function Editor() {
       window.removeEventListener('drop', clear)
     }
   }, [])
+
+  function importFile(file: File) {
+    // By what the file is, not by which control it arrived through: the same
+    // input and the same drop target take both, and a drop has no other clue.
+    const isJson = file.type === 'application/json' || /\.json$/i.test(file.name)
+    return isJson ? importData(file) : importResume(file)
+  }
+
+  /**
+   * Reads a file this app wrote.
+   *
+   * No round trip: the schemas that would validate it on the server are the
+   * same ones running here, and a file that never leaves the machine is one
+   * fewer copy of somebody's employment history in transit.
+   */
+  async function importData(file: File) {
+    setImporting(true)
+    setImportError(null)
+    try {
+      const restoredData = fromPortableJson(await file.text())
+      if (!restoredData) {
+        setImportError('That file is not a resume this app can read.')
+        return
+      }
+      form.reset(toFormValues(restoredData.profile))
+      setReport(null)
+      setDocument(
+        restoredData.document ?? {
+          ...document,
+          sections: sectionsForProfile(restoredData.profile, document.sections),
+        },
+      )
+    } catch {
+      setImportError('That file could not be read.')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   async function importResume(file: File) {
     setImporting(true)
@@ -229,15 +282,36 @@ export function Editor() {
     setConfirmingClear(false)
   }
 
-  function download() {
-    if (!compiled.bytes) return
-    const name = values.basics?.name?.trim().replace(/\s+/g, '-').toLowerCase() || 'resume'
-    const url = URL.createObjectURL(new Blob([compiled.bytes], { type: 'application/pdf' }))
+  /** `ana-ruiz`, or `resume` for a profile with no name in it yet. */
+  function fileStem(): string {
+    return values.basics?.name?.trim().replace(/\s+/g, '-').toLowerCase() || 'resume'
+  }
+
+  function offerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
     const link = window.document.createElement('a')
     link.href = url
-    link.download = `${name}.pdf`
+    link.download = filename
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  function download() {
+    if (!compiled.bytes) return
+    offerDownload(new Blob([compiled.bytes], { type: 'application/pdf' }), `${fileStem()}.pdf`)
+  }
+
+  /**
+   * Writes out the data the PDF was built from.
+   *
+   * The draft lives in this browser and nowhere else. Without this the only
+   * copy anyone has of their own career is a PDF, and reading one back goes
+   * through the parser — which is deterministic, imperfect on purpose, and
+   * reports what it could not place.
+   */
+  function saveData() {
+    const json = toPortableJson({ profile: values, document })
+    offerDownload(new Blob([json], { type: 'application/json' }), `${fileStem()}.json`)
   }
 
   return (
@@ -272,7 +346,7 @@ export function Editor() {
         dragDepth.current = 0
         setDraggingFile(false)
         const file = event.dataTransfer.files[0]
-        if (file) void importResume(file)
+        if (file) void importFile(file)
       }}
     >
       <header className="border-hairline bg-surface z-10 shrink-0 border-b">
@@ -282,19 +356,20 @@ export function Editor() {
           <input
             ref={fileRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,application/json,.json"
             className="sr-only"
             onChange={(event) => {
               const file = event.target.files?.[0]
-              if (file) void importResume(file)
+              if (file) void importFile(file)
               event.target.value = ''
             }}
           />
           <Button onClick={() => fileRef.current?.click()} disabled={importing}>
-            {importing ? 'Reading…' : 'Import a PDF'}
+            {importing ? 'Reading…' : 'Import'}
           </Button>
+          <Button onClick={saveData}>Save data</Button>
           <Button variant="primary" onClick={download} disabled={!compiled.bytes}>
-            Download
+            Download PDF
           </Button>
         </div>
 
@@ -468,7 +543,7 @@ function DropTarget({ className = '' }: { className?: string }) {
     <div
       className={`bg-accent-sunk/90 border-accent rounded-panel pointer-events-none absolute inset-4 z-20 flex items-center justify-center border-2 border-dashed ${className}`}
     >
-      <p className="text-accent text-micro font-mono uppercase">Drop a PDF to import it</p>
+      <p className="text-accent text-micro font-mono uppercase">Drop a PDF or a resume.json</p>
     </div>
   )
 }

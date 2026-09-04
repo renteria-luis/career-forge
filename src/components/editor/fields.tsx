@@ -188,7 +188,7 @@ export function Segmented<T extends string>({
             aria-pressed={current}
             onClick={() => onChange(option.value)}
             className={`rounded-edge text-micro px-2.5 py-1 font-mono transition-colors ${
-              current ? 'bg-accent text-paper' : 'text-muted hover:text-strong'
+              current ? 'bg-accent text-on-accent' : 'text-muted hover:text-strong'
             }`}
           >
             {option.label}
@@ -205,7 +205,7 @@ export function Button({
   ...props
 }: ComponentPropsWithoutRef<'button'> & { variant?: 'primary' | 'secondary' | 'quiet' }) {
   const styles = {
-    primary: 'bg-accent text-paper hover:opacity-90',
+    primary: 'bg-accent text-on-accent hover:opacity-90',
     secondary: 'border border-hairline text-strong hover:border-accent hover:text-accent',
     quiet: 'text-muted hover:text-accent',
   }[variant]

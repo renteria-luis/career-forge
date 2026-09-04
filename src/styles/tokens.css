@@ -27,9 +27,12 @@
   --color-proof-sunk: #eef1f8;
 
   /* Correction-mark red. Reserved for the smoke detector and validation errors —
-   * never for emphasis. If it is red, something needs the user's attention. */
-  --color-flag: #a83a26;
-  --color-flag-sunk: #fbeeeb;
+   * never for emphasis. If it is red, something needs the user's attention.
+   * The palette entry; components use the semantic `flag` below, which flips. */
+  --color-correction: #a83a26;
+  --color-correction-sunk: #fbeeeb;
+  --color-correction-lit: #f08a72;
+  --color-correction-lit-sunk: #2a1a17;
 
   --color-confirm: #2f6b46;
 
@@ -90,6 +93,12 @@
   --hairline: var(--color-rule);
   --accent: var(--color-proof);
   --accent-sunk: var(--color-proof-sunk);
+  /* Text drawn on top of --accent. It is not --surface: the accent inverts
+   * between themes and the text on it has to invert with it, or the primary
+   * button ends up pale ink on a pale blue. */
+  --on-accent: var(--color-paper);
+  --flag: var(--color-correction);
+  --flag-sunk: var(--color-correction-sunk);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -101,6 +110,9 @@
     --hairline: #302e36;
     --accent: #8aa6e8;
     --accent-sunk: #22263a;
+    --on-accent: var(--color-ink);
+    --flag: var(--color-correction-lit);
+    --flag-sunk: var(--color-correction-lit-sunk);
   }
 }
 
@@ -112,6 +124,9 @@
   --hairline: #302e36;
   --accent: #8aa6e8;
   --accent-sunk: #22263a;
+  --on-accent: var(--color-ink);
+  --flag: var(--color-correction-lit);
+  --flag-sunk: var(--color-correction-lit-sunk);
 }
 
 @theme inline {
@@ -122,4 +137,7 @@
   --color-hairline: var(--hairline);
   --color-accent: var(--accent);
   --color-accent-sunk: var(--accent-sunk);
+  --color-on-accent: var(--on-accent);
+  --color-flag: var(--flag);
+  --color-flag-sunk: var(--flag-sunk);
 }

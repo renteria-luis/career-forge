@@ -154,7 +154,7 @@ function BandStrip({
             : 'hover:bg-accent/5 hover:border-accent/40 border-transparent bg-transparent'
       }`}
     >
-      <span className="bg-accent text-paper text-micro absolute top-0 left-0 px-1 font-mono opacity-0 transition-opacity group-hover:opacity-100 peer-hover:opacity-100">
+      <span className="bg-accent text-on-accent text-micro absolute top-0 left-0 px-1 font-mono opacity-0 transition-opacity group-hover:opacity-100 peer-hover:opacity-100">
         {label}
       </span>
     </div>

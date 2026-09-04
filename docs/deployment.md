@@ -120,9 +120,12 @@ them.
    is the point.
 3. **A spend limit on the model provider workspace**, set before any key is
    created. See `docs/accounts-and-billing.md`.
-4. **`MAX_BODY_BYTES`** in `src/app/api/compile/route.ts`, already enforced at
-   512 KB. Compiling attacker-supplied documents is a denial-of-service surface
-   and the ceiling is what makes it a bounded one.
+4. **`MAX_BODY_BYTES`** in `src/app/api/compile/route.ts`, enforced at 512 KB
+   by counting the bytes that arrive. Compiling attacker-supplied documents is
+   a denial-of-service surface and the ceiling is what makes it a bounded one.
+   It was measured against `content-length` at first, which a chunked request
+   simply omits — 60 MB then arrived and compiled in 48 s. Trusting a header
+   the sender writes is not a limit.
 
 ## What is still missing before public mode
 
