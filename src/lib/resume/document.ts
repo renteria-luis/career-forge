@@ -107,8 +107,6 @@ export const resumeDocument = z.object({
   /** What the user calls this version, e.g. "Nomad Analytics - MLE". */
   name: z.string().default('Untitled'),
   template: z.enum(TEMPLATE_IDS).default('classic'),
-  /** Affects wording and dates only; the interface stays English. */
-  locale: z.string().default('en'),
   typography: typography.prefault({}),
   options: documentOptions.prefault({}),
   /** Render order is array order. A section absent here does not render. */
