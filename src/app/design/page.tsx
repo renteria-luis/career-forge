@@ -12,7 +12,11 @@ const PALETTE = [
   { name: 'graphite', value: '#6b6862', use: 'Secondary copy, labels, help text.' },
   { name: 'rule', value: '#e4e0d8', use: 'Hairlines and field borders.' },
   { name: 'proof', value: '#23458c', use: 'Every interactive affordance. Nothing decorative.' },
-  { name: 'flag', value: '#a83a26', use: 'Validation errors and the smoke detector only.' },
+  {
+    name: 'correction',
+    value: '#a83a26',
+    use: 'Validation errors and the smoke detector only. Lit to #f08a72 in dark.',
+  },
   { name: 'confirm', value: '#2f6b46', use: 'Checks that passed.' },
 ]
 

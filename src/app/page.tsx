@@ -44,7 +44,7 @@ export default function HomePage() {
       <div className="mt-10 flex flex-wrap items-center gap-4">
         <Link
           href="/editor"
-          className="bg-accent text-paper rounded-edge text-body px-5 py-2.5 font-medium transition-opacity hover:opacity-90"
+          className="bg-accent text-on-accent rounded-edge text-body px-5 py-2.5 font-medium transition-opacity hover:opacity-90"
         >
           Start writing
         </Link>
