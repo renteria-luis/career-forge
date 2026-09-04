@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { analyse, type Analysis } from '@/lib/ats/analyse'
 import { overallStatus } from '@/lib/ats/report'
-import { saveDraft } from '@/lib/editor/draft'
+import { saveDraft, serializeDraft } from '@/lib/editor/draft'
 import { emptyDocument, sectionsForProfile, toFormValues } from '@/lib/editor/starter'
 import { Button } from '@/components/editor/fields'
 import { CheckList } from './check-list'
@@ -59,23 +59,25 @@ export function AtsCheck() {
   function openInEditor() {
     if (!analysis) return
     const document = emptyDocument()
-    saveDraft({
-      profile: toFormValues(analysis.profile),
-      document: {
-        ...document,
-        sections: sectionsForProfile(analysis.profile, document.sections),
-        typography: analysis.parse.paper
-          ? { ...document.typography, paper: analysis.parse.paper }
-          : document.typography,
-        // Start from the length the file already was. Opening the editor to a
-        // warning about a resume the reader has not touched is a warning about
-        // nothing they did.
-        options: {
-          ...document.options,
-          maxPages: Math.min(Math.max(analysis.report.pages, 1), 10),
+    saveDraft(
+      serializeDraft({
+        profile: toFormValues(analysis.profile),
+        document: {
+          ...document,
+          sections: sectionsForProfile(analysis.profile, document.sections),
+          typography: analysis.parse.paper
+            ? { ...document.typography, paper: analysis.parse.paper }
+            : document.typography,
+          // Start from the length the file already was. Opening the editor to a
+          // warning about a resume the reader has not touched is a warning about
+          // nothing they did.
+          options: {
+            ...document.options,
+            maxPages: Math.min(Math.max(analysis.report.pages, 1), 10),
+          },
         },
-      },
-    })
+      }),
+    )
     router.push('/editor')
   }
 

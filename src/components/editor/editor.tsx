@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
-import { clearDraft, loadDraft, saveDraft, type Draft } from '@/lib/editor/draft'
+import { clearDraft, loadDraft, saveDraft, serializeDraft } from '@/lib/editor/draft'
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
 import { formBlockTitles } from '@/lib/editor/form-blocks'
 import { moveEntry, moveSection } from '@/lib/editor/rearrange'
@@ -64,10 +64,19 @@ export function Editor() {
   // IntersectionObserver on each keystroke, for a list that changes only when
   // the document does.
   const sectionTitles = useMemo(() => formBlockTitles(document.sections), [document.sections])
-  const compiled = useCompiledPdf(values, document)
+
+  /**
+   * One pass over the resume per keystroke, used three times.
+   *
+   * This string is the compile request body, the draft written to storage, and
+   * the only way to tell that anything changed — react-hook-form returns a new
+   * object every render, so identity says nothing. It was built twice, here and
+   * inside the compile hook, producing two identical strings.
+   */
+  const draft = serializeDraft({ profile: values, document })
+  const compiled = useCompiledPdf(draft)
 
   // Written on a delay so a burst of typing is one write, not one per keystroke.
-  const draft = JSON.stringify({ profile: values, document })
   const latestDraft = useRef(draft)
   /**
    * What was on screen when the editor opened.
@@ -83,7 +92,7 @@ export function Editor() {
   useEffect(() => {
     latestDraft.current = draft
     if (draft === opened) return
-    const timer = setTimeout(() => saveDraft(JSON.parse(draft) as Draft), 400)
+    const timer = setTimeout(() => saveDraft(draft), 400)
     return () => clearTimeout(timer)
   }, [draft, opened])
 
@@ -93,7 +102,7 @@ export function Editor() {
     // one event mobile browsers reliably deliver before discarding a page.
     const flush = () => {
       if (latestDraft.current === opened) return
-      saveDraft(JSON.parse(latestDraft.current) as Draft)
+      saveDraft(latestDraft.current)
     }
     window.addEventListener('pagehide', flush)
     return () => window.removeEventListener('pagehide', flush)
