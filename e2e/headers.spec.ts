@@ -67,6 +67,26 @@ test.describe('page structure', () => {
     await expect(page.getByRole('main')).toHaveCount(1)
   })
 
+  test('the Content and Layout tabs name the panel they switch', async ({ page }) => {
+    await page.goto('/editor')
+
+    const content = page.getByRole('tab', { name: 'content' })
+    const layout = page.getByRole('tab', { name: 'layout' })
+    await expect(content).toHaveAttribute('aria-selected', 'true')
+    await expect(layout).toHaveAttribute('aria-selected', 'false')
+
+    // A tab that controls nothing announces a state about no region. The panel
+    // is one element either way, so both tabs point at it and it says which
+    // tab it belongs to.
+    const panel = page.getByRole('tabpanel')
+    await expect(panel).toHaveCount(1)
+    await expect(panel).toHaveAttribute('aria-labelledby', 'pane-tab-content')
+
+    await layout.click()
+    await expect(layout).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'pane-tab-layout')
+  })
+
   for (const [path, trigger] of [
     ['/editor', 'Import'],
     ['/ats-check', 'Drop your resume here'],
