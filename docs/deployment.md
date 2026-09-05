@@ -132,18 +132,41 @@ them.
    is the point.
 3. **A spend limit on the model provider workspace**, set before any key is
    created. See `docs/accounts-and-billing.md`.
-4. **`MAX_BODY_BYTES`** in `src/app/api/compile/route.ts`, enforced at 512 KB
-   by counting the bytes that arrive. Compiling attacker-supplied documents is
-   a denial-of-service surface and the ceiling is what makes it a bounded one.
-   It was measured against `content-length` at first, which a chunked request
-   simply omits — 60 MB then arrived and compiled in 48 s. Trusting a header
-   the sender writes is not a limit.
+4. **Body ceilings**, counted on the bytes that arrive rather than read off a
+   header, in `src/lib/http/bounded-body.ts`. 512 KB for a compile, 6 MB for an
+   upload. Serving attacker-supplied documents is a denial-of-service surface
+   and the ceiling is what makes it a bounded one. Both endpoints got this
+   wrong once, in the same way and for the same reason — see below.
+
+## The ceilings that were not ceilings
+
+Both public endpoints once trusted a size the sender supplied, and both were
+measured rather than reasoned about.
+
+`/api/compile` read `content-length`, which a chunked request simply omits. 60
+MB then arrived and compiled in 48 s.
+
+`/api/import` looked more careful and was worse. It called `formData()` and then
+checked `file.size` — a number only knowable once the whole body is decoded and
+in memory. Measured against the deployment's own 512 MiB:
+
+| 300 MB upload, no `content-length` | Before                       | After              |
+| ---------------------------------- | ---------------------------- | ------------------ |
+| Bytes accepted                     | all 300 MB                   | stops at 11 MB     |
+| Time to refuse                     | 577 ms                       | 26 ms              |
+| Peak RSS                           | 1,085 MB                     | 154 MB             |
+| Outcome at 512 MiB                 | **process killed, no reply** | 413, still serving |
+
+One anonymous request took the service down. The tidy 413 it returns on a
+machine with spare memory is a message printed after the damage, not a limit.
+
+The general shape is worth keeping: **a size a caller tells you is not a
+measurement, and neither is one you can only take after buffering.**
 
 ## What is still missing before public mode
 
-- A rate limit on `/api/compile`. The route's own comment says so. It is
-  reachable without an account and compiles arbitrary documents. The size
-  ceiling bounds one request; nothing yet bounds their number.
+- A rate limit on both public endpoints. The size ceilings bound one request;
+  nothing yet bounds their number.
 - A registered domain, mapped to the service. Cloud Run domain mapping and its
   TLS certificate are free.
 - `--min-instances 1`, which leaves the free tier. The allowance is 50 hours of
