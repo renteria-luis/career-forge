@@ -383,18 +383,23 @@ test.describe('starting over', () => {
     await page.getByLabel('Phone').fill('+1 987-654-3210')
     await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
 
-    // Clear sits with the document controls, which on a phone are the other
-    // view — the same place the paper size lives.
-    await revealPreview(page)
-    await page.getByRole('button', { name: 'Clear' }).click()
+    // Clearing lives under Layout now, at the foot of the document settings.
+    // It used to sit beside the paper size, styled like the button next to it,
+    // which made removing everything look like a choice of page format.
+    await page.getByRole('tab', { name: 'Layout' }).click()
+    await page.getByRole('button', { name: 'Clear everything' }).click()
     await expect(page.getByText('Clear everything?')).toBeVisible()
 
     // Backing out leaves the work alone.
     await page.getByRole('button', { name: 'Keep it' }).click()
+    await page.getByRole('tab', { name: 'Content' }).click()
     await expect(page.getByLabel('Full name')).toHaveValue('Ana Ruiz')
 
-    await page.getByRole('button', { name: 'Clear' }).click()
-    await page.getByRole('button', { name: 'Clear everything' }).click()
+    await page.getByRole('tab', { name: 'Layout' }).click()
+    await page.getByRole('button', { name: 'Clear everything' }).first().click()
+    // The dialog's own confirm, not the control that opened it.
+    await page.getByRole('button', { name: 'Clear everything' }).last().click()
+    await page.getByRole('tab', { name: 'Content' }).click()
 
     // Every registered field, not just the ones the new value happens to name:
     // react-hook-form leaves an input alone when it is reset to undefined.
@@ -406,9 +411,9 @@ test.describe('starting over', () => {
     await page.goto('/editor')
     await page.getByLabel('Full name').fill('Ana Ruiz')
     await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
-    await revealPreview(page)
-    await page.getByRole('button', { name: 'Clear' }).click()
-    await page.getByRole('button', { name: 'Clear everything' }).click()
+    await page.getByRole('tab', { name: 'Layout' }).click()
+    await page.getByRole('button', { name: 'Clear everything' }).first().click()
+    await page.getByRole('button', { name: 'Clear everything' }).last().click()
     await page.reload()
     await expect(page.getByLabel('Full name')).toHaveValue('', { timeout: 15_000 })
   })
@@ -1045,5 +1050,86 @@ test.describe('a drag scrolls the page at its edges', () => {
     await page.mouse.up()
 
     await expect(page.getByLabel('Role').first()).toHaveValue('Role 0')
+  })
+})
+
+/**
+ * The chrome, and the controls that were saying the wrong thing about
+ * themselves. Measured before this pass: 90px of header in two bands, 24% of a
+ * phone screen given over to it, and an email address cut off mid-domain at
+ * 1100px because a viewport breakpoint gave a half-width pane two columns.
+ */
+test.describe('the editor gets out of its own way', () => {
+  test('the header is one band, and the compile readout is on its row', async ({ page }) => {
+    await page.goto('/editor')
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+
+    const header = page.locator('header')
+    await expect(header.locator('> div')).toHaveCount(1)
+    // Still visible while the form is the pane on screen, which on a phone is
+    // the only place the overflow warning can be read before it is too late.
+    await expect(header.locator('p.font-mono')).toBeVisible()
+  })
+
+  test('a phone keeps its screen for the form', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'This is a statement about phones.')
+    await page.goto('/editor')
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+
+    const share = await page.evaluate(() => {
+      const header = document.querySelector('header')!.getBoundingClientRect().height
+      const bar = [...document.querySelectorAll('div')].find(
+        (element) =>
+          element.className.includes('lg:hidden') && element.className.includes('border-t'),
+      )
+      const foot = bar ? bar.getBoundingClientRect().height : 0
+      return (header + foot) / window.innerHeight
+    })
+    expect(share).toBeLessThan(0.18)
+  })
+
+  test('the primary action is in reach of a thumb', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'This is a statement about phones.')
+    await page.goto('/editor')
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+
+    // One Download PDF, and it is in the bar at the foot rather than wrapped
+    // onto a second header row at the top of a page held in one hand.
+    const download = page.getByRole('button', { name: 'Download PDF' })
+    await expect(download).toHaveCount(1)
+    const box = await download.boundingBox()
+    expect(box!.y).toBeGreaterThan(page.viewportSize()!.height / 2)
+  })
+
+  test('a narrow pane stacks the paired fields rather than cramping them', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'The pane is only ever full width here.')
+    await page.setViewportSize({ width: 1100, height: 800 })
+    await page.goto('/editor')
+    await page.getByLabel('Email').fill('ana.ruiz@example.com')
+
+    // The form column answers to its own width now, not the window's.
+    const columns = await page
+      .locator('form .grid')
+      .first()
+      .evaluate((element) => getComputedStyle(element).gridTemplateColumns)
+    expect(columns.split(' ')).toHaveLength(1)
+
+    const fits = await page
+      .getByLabel('Email')
+      .evaluate((element) => element.scrollWidth <= element.clientWidth)
+    expect(fits).toBe(true)
+  })
+
+  test('clearing everything is not filed with the page formats', async ({ page }) => {
+    await page.goto('/editor')
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+
+    // It used to sit beside Letter/A4 wearing the same style, which made
+    // removing the resume, the layout and the draft look like a format choice.
+    await expect(page.getByRole('button', { name: 'Clear everything' })).toHaveCount(0)
+    await page.getByRole('tab', { name: 'Layout' }).click()
+    await expect(page.getByRole('button', { name: 'Clear everything' })).toBeVisible()
   })
 })
