@@ -5,6 +5,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { clearDraft, loadDraft, saveDraft, serializeDraft } from '@/lib/editor/draft'
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
+import { useActiveBlock } from '@/lib/editor/follow'
 import { formBlockTitles } from '@/lib/editor/form-blocks'
 import { moveEntry, moveSection } from '@/lib/editor/rearrange'
 import { fromPortableJson, toPortableJson } from '@/lib/editor/portable'
@@ -66,6 +67,20 @@ export function Editor() {
   const sectionTitles = useMemo(() => formBlockTitles(document.sections), [document.sections])
 
   /**
+   * The preview follows the form.
+   *
+   * Only while the content pane is the one on screen: under Layout there is no
+   * resume being scrolled through, and on a phone the two are never visible at
+   * once, so moving the hidden one would only mean finding it moved on return.
+   *
+   * And never while rearranging. Blocks are dragged from where they are on the
+   * page, so a page that scrolls out from under the pointer moves the target
+   * mid-drag and the block lands somewhere nobody aimed at.
+   */
+  const formScrollRef = useRef<HTMLDivElement>(null)
+  const activeBlock = useActiveBlock(formScrollRef, pane === 'content' && rearrange === null)
+
+  /**
    * One pass over the resume per keystroke, used three times.
    *
    * This string is the compile request body, the draft written to storage, and
@@ -75,6 +90,13 @@ export function Editor() {
    */
   const draft = serializeDraft({ profile: values, document })
   const compiled = useCompiledPdf(draft)
+
+  // The form says which block it is on; the compile says where that block was
+  // drawn. Neither knows about the other, and this is the whole join.
+  const focusedBlock = useMemo(
+    () => compiled.blocks.find((block) => block.id === activeBlock) ?? null,
+    [compiled.blocks, activeBlock],
+  )
 
   // Written on a delay so a burst of typing is one write, not one per keystroke.
   const latestDraft = useRef(draft)
@@ -415,7 +437,7 @@ export function Editor() {
           {draggingFile && <DropTarget className="lg:hidden" />}
           {/* The pane itself does not scroll — this does — so the highlight
               above stays on the visible area instead of scrolling away. */}
-          <div className="absolute inset-0 overflow-y-auto">
+          <div ref={formScrollRef} className="absolute inset-0 overflow-y-auto">
             <div className="mx-auto flex w-full max-w-3xl gap-5 px-4 py-6 sm:px-6">
               <div className="min-w-0 flex-1">
                 <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
@@ -525,6 +547,7 @@ export function Editor() {
             <div className="mx-auto w-full max-w-[680px]">
               <Preview
                 compiled={compiled}
+                focus={focusedBlock}
                 onSelectField={focusField}
                 rearrange={rearrange ?? undefined}
                 onReorder={reorder}

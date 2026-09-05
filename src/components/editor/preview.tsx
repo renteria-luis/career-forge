@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { loadPdfjs } from '@/lib/parse/pdfjs'
+import { scrollingAncestor } from '@/lib/editor/follow'
 import type { CompiledPdf } from '@/lib/editor/use-compiled-pdf'
+import type { LayoutBlock } from '@/lib/typst/compile'
 import { RearrangeOverlay, useBlockDrag, type RearrangeMode } from './rearrange-overlay'
 
 /**
@@ -25,6 +27,9 @@ interface TextBox {
   bottom: number
 }
 
+/** A little air above the block, so it does not sit flush against the edge. */
+const FOLLOW_MARGIN_PX = 16
+
 interface RenderedPage {
   canvas: HTMLCanvasElement
   boxes: TextBox[]
@@ -37,6 +42,7 @@ export function Preview({
   onSelectField,
   rearrange,
   onReorder,
+  focus,
 }: {
   compiled: CompiledPdf
   /**
@@ -47,6 +53,8 @@ export function Preview({
   /** When set, blocks can be dragged into a new order on the page. */
   rearrange?: RearrangeMode
   onReorder?: (fromId: string, toId: string) => void
+  /** The block the form is sitting on, to bring into view. See `follow.ts`. */
+  focus?: LayoutBlock | null
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [pages, setPages] = useState<RenderedPage[]>([])
@@ -134,6 +142,37 @@ export function Preview({
   // One array for the whole list. Built inside the map it was rebuilt for every
   // page, and each overlay wants the same heights to place a drop against.
   const pageHeights = useMemo(() => pages.map((page) => page.heightPt), [pages])
+
+  /**
+   * Bring the block the form is on into view.
+   *
+   * Only when the block changes, not when its position does. A compile lands on
+   * every keystroke and moves everything below the edit by a fraction of a
+   * point; scrolling on that would drag the page around while somebody types.
+   */
+  const shown = useRef<string | null>(null)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!focus || !container || pages.length === 0) return
+    if (shown.current === focus.id) return
+
+    const page = container.children[focus.page - 1]
+    const heightPt = pages[focus.page - 1]?.heightPt
+    if (!(page instanceof HTMLElement) || !heightPt || page.offsetHeight === 0) return
+
+    const scroller = scrollingAncestor(container)
+    if (!scroller) return
+
+    // Positions arrive in points from the top of the page; the page is drawn at
+    // whatever width the pane allows. A share of its height needs no scale.
+    const withinPage = (focus.y / heightPt) * page.offsetHeight
+    const offset = page.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+    shown.current = focus.id
+    scroller.scrollTo({
+      top: Math.max(0, scroller.scrollTop + offset + withinPage - FOLLOW_MARGIN_PX),
+      behavior: 'smooth',
+    })
+  }, [focus, pages])
 
   return (
     <div ref={containerRef} className="flex w-full flex-col gap-4">

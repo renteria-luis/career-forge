@@ -825,6 +825,77 @@ test.describe('import and export', () => {
 })
 
 /**
+ * A resume form runs to five or six screens with a normal career, and the
+ * preview used to sit at the top of page one however far down you scrolled. The
+ * one thing a live preview is for is showing you what you are changing.
+ */
+test.describe('the preview follows the form', () => {
+  const previewScroller = 'section[aria-label="Preview"] div.overflow-y-auto'
+  const formScroller = 'section[aria-label="Resume content"] > div.absolute'
+
+  /** Enough of a career that the form is longer than the window. */
+  async function fillSeveralRoles(page: import('@playwright/test').Page) {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    for (let i = 0; i < 6; i += 1) {
+      if (i > 0) await page.getByRole('button', { name: 'Add a role' }).click()
+      await page.getByLabel('Role').nth(i).fill(`Role ${i}`)
+      await page.getByLabel('Employer').nth(i).fill(`Company ${i}`)
+    }
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+  }
+
+  test('scrolling to a later entry brings it into view on the page', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'The two panes are never on screen together.')
+    await fillSeveralRoles(page)
+
+    const preview = page.locator(previewScroller)
+    expect(await preview.evaluate((element) => element.scrollTop)).toBe(0)
+
+    await page.locator(formScroller).evaluate((element) => element.scrollTo({ top: 2600 }))
+
+    await expect
+      .poll(() => preview.evaluate((element) => element.scrollTop), { timeout: 5_000 })
+      .toBeGreaterThan(0)
+  })
+
+  test('the form carries the same block ids the compiler reports', async ({ page }) => {
+    await fillSeveralRoles(page)
+
+    // The join between the two halves. If either side renames a block, the
+    // preview silently stops following rather than failing.
+    const marks = await page
+      .locator('[data-block]')
+      .evaluateAll((all) => all.map((element) => (element as HTMLElement).dataset.block))
+    expect(marks).toContain('section:work')
+    expect(marks).toContain('work.0')
+    expect(marks).toContain('work.5')
+  })
+
+  /**
+   * Found by this change breaking two existing tests. A block is dragged from
+   * where it sits on the page, so a page that scrolls out from under the
+   * pointer moves the target mid-drag and the block lands somewhere nobody
+   * aimed at.
+   */
+  test('the page holds still while blocks are being rearranged', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await fillSeveralRoles(page)
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    await expect(page.locator('[aria-label="Move work.1"]').first()).toBeVisible({
+      timeout: 15_000,
+    })
+
+    const preview = page.locator(previewScroller)
+    const before = await preview.evaluate((element) => element.scrollTop)
+    await page.locator(formScroller).evaluate((element) => element.scrollTo({ top: 2600 }))
+    await page.waitForTimeout(1_000)
+
+    expect(await preview.evaluate((element) => element.scrollTop)).toBe(before)
+  })
+})
+
+/**
  * A select, a range and a checkbox arrive with the operating system's own
  * chrome, and the settings pane was the one screen in the app still wearing it.
  */

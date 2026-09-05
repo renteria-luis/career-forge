@@ -244,13 +244,18 @@ export const ProfileForm = memo(function ProfileForm({
     switch (id) {
       case 'work':
         return (
-          <FormSection title={formBlockTitle(id)} count={work.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={work.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {work.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={work.fields.length}
+                  blockId={`work.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -314,13 +319,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'projects':
         return (
-          <FormSection title={formBlockTitle(id)} count={projects.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={projects.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {projects.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={projects.fields.length}
+                  blockId={`projects.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -389,13 +399,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'education':
         return (
-          <FormSection title={formBlockTitle(id)} count={education.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={education.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {education.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={education.fields.length}
+                  blockId={`education.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -459,13 +474,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'skills':
         return (
-          <FormSection title={formBlockTitle(id)} count={skills.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={skills.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {skills.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={skills.fields.length}
+                  blockId={`skills.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -496,13 +516,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'languages':
         return (
-          <FormSection title={formBlockTitle(id)} count={languages.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={languages.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {languages.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={languages.fields.length}
+                  blockId={`languages.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -534,13 +559,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'certificates':
         return (
-          <FormSection title={formBlockTitle(id)} count={certificates.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={certificates.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {certificates.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={certificates.fields.length}
+                  blockId={`certificates.${index}`}
                   title={
                     <EntryTitle
                       form={form}

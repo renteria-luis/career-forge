@@ -8,6 +8,7 @@ export function EntryCard({
   index,
   total,
   title,
+  blockId,
   onRemove,
   onMove,
   children,
@@ -16,12 +17,18 @@ export function EntryCard({
   total: number
   /** A node, so it can watch its own field instead of the whole form. */
   title: ReactNode
+  /**
+   * What this entry is called on the page, e.g. `work.1`. It is how scrolling
+   * the form moves the preview to the same entry; the compiler reports the
+   * same ids for what it drew.
+   */
+  blockId?: string
   onRemove: () => void
   onMove: (direction: -1 | 1) => void
   children: ReactNode
 }) {
   return (
-    <li className="border-hairline rounded-panel border">
+    <li data-block={blockId} className="border-hairline rounded-panel border">
       {/* Open by default. A collapsed entry hides the fields someone came here
           to fill in, so folding is something they ask for once a list is long
           enough to be in the way. */}
@@ -89,17 +96,21 @@ export function FormSection({
   title,
   count,
   unit = 'entry',
+  blockId,
   children,
 }: {
   title: string
   count?: number
   unit?: keyof typeof UNITS
+  /** What this section is called on the page, e.g. `section:work`. */
+  blockId?: string
   children: ReactNode
 }) {
   return (
     <details
       open
       id={sectionAnchor(title)}
+      data-block={blockId}
       className="border-hairline group scroll-mt-4 border-b pb-6"
     >
       <summary className="text-strong flex cursor-pointer list-none items-center justify-between gap-2 py-4">
