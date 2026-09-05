@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { ResumeDocument } from '@/lib/resume/document'
-import type { Profile } from '@/lib/resume/profile'
 import type { LayoutBlock } from '@/lib/typst/compile'
 
 /**
@@ -35,7 +33,13 @@ export interface CompiledPdf {
 
 const DEBOUNCE_MS = 250
 
-export function useCompiledPdf(profile: Profile, document: ResumeDocument): CompiledPdf {
+/**
+ * `payload` is the request body, already serialised. The editor builds that
+ * string anyway — to save the draft, and to notice a change at all — and
+ * building it a second time here meant walking the whole resume twice per
+ * keystroke to produce two identical strings.
+ */
+export function useCompiledPdf(payload: string): CompiledPdf {
   const [state, setState] = useState<CompiledPdf>({
     bytes: null,
     status: 'idle',
@@ -47,7 +51,6 @@ export function useCompiledPdf(profile: Profile, document: ResumeDocument): Comp
   })
 
   const abortRef = useRef<AbortController | null>(null)
-  const payload = JSON.stringify({ profile, document })
 
   useEffect(() => {
     const timer = setTimeout(async () => {

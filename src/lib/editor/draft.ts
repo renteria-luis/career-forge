@@ -43,10 +43,29 @@ export function loadDraft(): Draft | undefined {
   }
 }
 
-export function saveDraft(draft: Draft): void {
+/**
+ * The draft as one string.
+ *
+ * Separate from `saveDraft` because the editor already needs this exact string
+ * for something else: it is the body posted to `/api/compile`, and it is how a
+ * change is detected at all, since react-hook-form hands back a fresh object on
+ * every keystroke. Serialising once and using it three times is the difference
+ * between two passes over the resume per keystroke and one.
+ */
+export function serializeDraft(draft: Draft): string {
+  return JSON.stringify(draft)
+}
+
+/**
+ * Takes the string rather than the object, so the caller that already has one
+ * does not pay to rebuild it. Nothing validates on the way in: what comes back
+ * out is parsed by `loadDraft` against the schemas, and a bad string there is
+ * indistinguishable from the hand-edited storage that function already expects.
+ */
+export function saveDraft(serialized: string): void {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(draft))
+    window.localStorage.setItem(KEY, serialized)
   } catch {
     // Private browsing and full quotas both throw here. Nothing to do about it
     // and nothing worth interrupting the user over.

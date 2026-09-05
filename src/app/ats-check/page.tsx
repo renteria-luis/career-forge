@@ -33,7 +33,7 @@ const QUESTIONS = [
   },
   {
     q: 'Does my file get uploaded?',
-    a: 'No. The reading happens in your browser, so the file never reaches a server. That is not a policy — there is no endpoint here that receives it.',
+    a: 'No. It is read where it sits, by code already on the page, and nothing is sent anywhere. Open your network tab and check.',
   },
   {
     q: 'What breaks a resume most often?',
@@ -54,8 +54,7 @@ export default function AtsCheckPage() {
         do not, and the order the page is read in.
       </p>
       <p className="text-muted max-w-measure text-body mt-3">
-        The reading happens in your browser. The file never leaves your machine and nothing is
-        stored.
+        The reading happens in your browser. There is no endpoint here that receives a file.
       </p>
 
       <div className="mt-10">

@@ -80,7 +80,6 @@ export const sampleDocument: ResumeDocument = {
   id: 'sample',
   name: 'Sample',
   template: 'classic',
-  locale: 'en',
   typography: { paper: 'letter', font: 'carlito', size: 10, margin: 30, density: 0.9 },
   options: {
     maxPages: 1,

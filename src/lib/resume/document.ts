@@ -90,13 +90,23 @@ export const documentOptions = z.object({
   showLinkedin: z.boolean().default(true),
 })
 
+/**
+ * The templates that exist, as files in `src/lib/typst/templates`.
+ *
+ * An enum rather than a string, for the same reason paper and font are: this
+ * value picks a file to read, and an unconstrained one reached the compiler and
+ * threw there instead of failing at the boundary. `/api/compile` is public and
+ * answered `{"template":"modern"}` with a 500 and a stack trace, where every
+ * other bad value in the same body gets a 422 naming the field.
+ */
+export const TEMPLATE_IDS = ['classic'] as const
+export type TemplateId = (typeof TEMPLATE_IDS)[number]
+
 export const resumeDocument = z.object({
   id: z.string(),
   /** What the user calls this version, e.g. "Nomad Analytics - MLE". */
   name: z.string().default('Untitled'),
-  template: z.string().default('classic'),
-  /** Affects wording and dates only; the interface stays English. */
-  locale: z.string().default('en'),
+  template: z.enum(TEMPLATE_IDS).default('classic'),
   typography: typography.prefault({}),
   options: documentOptions.prefault({}),
   /** Render order is array order. A section absent here does not render. */

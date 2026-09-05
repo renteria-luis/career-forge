@@ -158,11 +158,14 @@ interface RawEntry {
   url?: string
 }
 
+/** Built once. The parts are constants, and this is asked of every line. */
+const BARE_URL = new RegExp(`^(?:${URL.source})$`, 'i')
+
 /** True when a line is an address and nothing else. */
 function isBareUrl(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed === '' || /\s/.test(trimmed)) return false
-  return new RegExp(`^(?:${URL.source})$`, 'i').test(trimmed)
+  return BARE_URL.test(trimmed)
 }
 
 /**

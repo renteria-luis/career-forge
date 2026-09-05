@@ -24,42 +24,54 @@ migration.
 
 ## Measured behaviour
 
-Every number below came from running the production build and hitting
-`/api/compile` with `sampleProfile`. They are the basis for the sizing choices
-in this document. Re-measure before changing them.
+Every number below came from running the production build against
+`/api/compile`. They are the basis for the sizing choices in this document.
+Re-measure before changing them.
 
-| Metric                             | Default heap | `--max-old-space-size=256` |
-| ---------------------------------- | ------------ | -------------------------- |
-| Cold start to first PDF            | 346 ms       | 346 ms                     |
-| Compiled PDF                       | 49 KB        | 49 KB                      |
-| RSS after first compile            | 153 MB       | 155 MB                     |
-| RSS steady state (2,000 compiles)  | **465 MB**   | **272 MB**                 |
-| Compile latency p50                | 4.08 ms      | 3.87 ms                    |
-| Compile latency p95                | 5.69 ms      | 5.28 ms                    |
-| 50 concurrent compiles, wall clock | 92 ms        | 87 ms                      |
+**Send different content on every compile.** The first version of this table did
+not, and that single mistake made three of its rows wrong. Typst memoizes by
+content, so re-posting one payload measures cache hits: it reported a latency
+the app never achieves in use, and it hid a cache that grew without bound
+because nothing in the test ever missed. Typing is the workload, and no two
+keystrokes produce the same document.
+
+| Metric                                   | Default heap | `--max-old-space-size=256` |
+| ---------------------------------------- | ------------ | -------------------------- |
+| Cold start, process launch to first PDF  | 321 ms       | 321 ms                     |
+| Compiled PDF, `sampleProfile`            | 48 KB        | 48 KB                      |
+| RSS after first compile                  | 158 MB       | 162 MB                     |
+| RSS after 2,000 compiles of varying text | **283 MB**   | **310 MB**                 |
+| Compile latency p50                      | 5.72 ms      | 5.58 ms                    |
+| Compile latency p95                      | 6.79 ms      | 6.98 ms                    |
+| 50 concurrent compiles, wall clock       | 200 ms       | 183 ms                     |
 
 Four things follow from this, and each one decides something:
 
-**Memory is a configuration choice, not a property of the app.** Left alone, V8
-grows the heap to 465 MB because the machine has room, which does not fit a
-512 MB instance. Capped at a 256 MB old space it settles at 272 MB with no
-latency cost — the p50 is marginally _faster_. Every deployment sets
-`NODE_OPTIONS=--max-old-space-size=256`. Without it the smaller instance sizes
-are unavailable for no reason.
+**The memo cache is what bounds memory, not the heap flag.** Both
+configurations now plateau well inside a 512 MiB instance, and the difference
+between them is within the spread of single runs. That was not true before
+`compileResume` began evicting: measured with varying content, RSS climbed past
+1 GB by compile 2,000 and never fell. `NODE_OPTIONS=--max-old-space-size=256`
+stays on the deployment because it costs nothing, but it is no longer the thing
+keeping the app inside its instance, and it cannot be — the memory that grew was
+native, on the other side of the V8 heap the flag limits.
 
-**There is no leak.** RSS rises and then plateaus in both configurations, flat
-from compile 1,000 through 2,000. The compiler and font caches held on
-`globalThis` are bounded, which is what makes scale-to-zero safe to run
-unattended.
+**It plateaus, and only because it is made to.** RSS rises through the first
+thousand compiles and is flat from there. That is the eviction working; it is
+not a property of the compiler, and removing the eviction brings the growth
+straight back. This is what makes scale-to-zero safe to run unattended.
 
-**Scale to zero is free of consequence here.** A 346 ms cold start is below the
+**Scale to zero is free of consequence here.** A 321 ms cold start is below the
 threshold where a person notices a page is waking up. There is no case for
 paying for an always-warm instance in personal mode.
 
-**Egress is not a cost driver at this size.** At 49 KB per PDF, the 1 GB monthly
+**Egress is not a cost driver at this size.** At 48 KB per PDF, the 1 GB monthly
 free egress allowance covers about 20,000 compiles. This matters because the
 live preview posts on a debounce, so compiles — not page loads — are the
-dominant traffic. Revisit if the PDF grows by an order of magnitude.
+dominant traffic. That figure describes a resume; the size follows the content,
+and a document with 2,000 entries — which `MAX_BODY_BYTES` still permits —
+compiles to 1.9 MB. The allowance is sized for the traffic this actually sees,
+not for the largest document the endpoint accepts.
 
 ## Where it runs
 
@@ -67,13 +79,13 @@ dominant traffic. Revisit if the PDF grows by an order of magnitude.
 
 Chosen because the memory ceiling is a number you pick rather than a fixed
 property of a plan tier. The free tiers at Render and Koyeb are capped at
-512 MB with no way to raise it; measured at 272 MB the app fits, but with no
+512 MB with no way to raise it; measured at 310 MB the app fits, but with no
 headroom if a future change adds a font or a template. Cloud Run keeps the
 escape hatch.
 
 Free-tier allowances are 2M requests, 180,000 vCPU-seconds and 360,000
-GiB-seconds per month. At 4 ms of billed time per compile, personal use does
-not approach any of them. Verify the region is one the free tier covers before
+GiB-seconds per month. At about 6 ms of billed time per compile, personal use
+does not approach any of them. Verify the region is one the free tier covers before
 deploying; the allowance is limited to the cheapest US regions.
 
 Alternatives, should the above stop being true:
@@ -106,7 +118,7 @@ crawler into an invoice. One instance handles 40 concurrent compiles in under
 100 ms; a personal deployment will never need a second one.
 
 `--concurrency 40` is set below the platform default of 80 because 50
-concurrent compiles were measured at 272 MB of RSS. Half the default leaves
+concurrent compiles were measured at 310 MB of RSS. Half the default leaves
 room for the request bodies that arrive with them.
 
 ## Cost controls

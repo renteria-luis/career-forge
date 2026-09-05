@@ -58,14 +58,21 @@ describe('compileResume', () => {
     expect(result.pageCount).toBe(1)
   })
 
+  // The schema now rejects both of these at the boundary, which is where they
+  // should stop. These stay because this guard is the one that matters if a
+  // caller ever reaches the compiler without going through the schema, and the
+  // cast is what makes that bypass explicit rather than accidental.
+  const withTemplate = (template: string) =>
+    ({ ...sampleDocument, template }) as unknown as typeof sampleDocument
+
   it('rejects a template name that could escape the template directory', () => {
-    expect(() =>
-      compileResume(sampleProfile, { ...sampleDocument, template: '../../../etc/passwd' }),
-    ).toThrow(/Invalid template name/)
+    expect(() => compileResume(sampleProfile, withTemplate('../../../etc/passwd'))).toThrow(
+      /Invalid template name/,
+    )
   })
 
   it('raises a typed error when the template itself is broken', () => {
-    expect(() => compileResume(sampleProfile, { ...sampleDocument, template: 'nope' })).toThrow()
+    expect(() => compileResume(sampleProfile, withTemplate('nope'))).toThrow()
   })
 
   // The registry promises a file for every font id. This is the test that keeps

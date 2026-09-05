@@ -415,6 +415,21 @@ test.describe('starting over', () => {
 })
 
 test.describe('rearranging on the page', () => {
+  test('Escape leaves rearrange mode', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+    await revealPreview(page)
+
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    await expect(page.getByRole('group', { name: 'What to rearrange' })).toBeVisible()
+
+    // What everyone presses to get out of a mode. Before this the only way back
+    // was finding the button that turned it on.
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('group', { name: 'What to rearrange' })).toHaveCount(0)
+  })
+
   test('dragging an entry over another reorders them', async ({ page }, testInfo) => {
     // Relevance is not always chronology: a job from years ago can be the one
     // that matters for the posting in hand.
