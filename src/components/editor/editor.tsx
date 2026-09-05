@@ -392,8 +392,20 @@ export function Editor() {
       }}
     >
       <header className="border-hairline bg-surface z-10 shrink-0 border-b">
-        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-          <h1 className="font-display text-title text-strong mr-auto">Career Forge</h1>
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:gap-x-4 sm:px-6">
+          {/* One size down on a phone. At 1.25rem the four things on this row
+              added up to 425px inside a 412px screen, and "Save data" wrapped
+              onto a row of its own — a whole band of chrome bought by 13px. */}
+          <h1 className="font-display text-body text-strong sm:text-title">Career Forge</h1>
+          {/* On the title's row rather than in a band of its own below it. That
+              band was full width and bordered, and it existed to say six words.
+              It has to stay here rather than move beside the paper controls,
+              where it would read better: the preview pane is not on screen
+              while a phone is being typed into, and the overflow warning is
+              the one thing somebody needs to see before they get there. */}
+          <div className="mr-auto min-w-0">
+            <BuildStatus compiled={compiled} />
+          </div>
 
           <input
             ref={fileRef}
@@ -415,13 +427,18 @@ export function Editor() {
             {importing ? 'Reading…' : 'Import'}
           </Button>
           <Button onClick={saveData}>Save data</Button>
-          <Button variant="primary" onClick={download} disabled={!compiled.bytes}>
+          {/* On a phone this lives in the bar at the foot of the screen. Here it
+              wrapped onto a second row of its own, which cost a whole band of
+              chrome to say one thing, and it sat at the top of a page held in
+              one hand. */}
+          <Button
+            variant="primary"
+            onClick={download}
+            disabled={!compiled.bytes}
+            className="hidden lg:inline-flex"
+          >
             Download PDF
           </Button>
-        </div>
-
-        <div className="border-hairline flex w-full items-center gap-3 border-t px-4 py-1.5 sm:px-6">
-          <BuildStatus compiled={compiled} />
         </div>
       </header>
 
@@ -439,7 +456,11 @@ export function Editor() {
               above stays on the visible area instead of scrolling away. */}
           <div ref={formScrollRef} className="absolute inset-0 overflow-y-auto">
             <div className="mx-auto flex w-full max-w-3xl gap-5 px-4 py-6 sm:px-6">
-              <div className="min-w-0 flex-1">
+              {/* A container, so the two-column rows below answer to this column
+                  rather than to the window. A viewport breakpoint gave a pane
+                  half the window two columns and then cramped them: at 1100px
+                  an email address was cut off mid-domain. */}
+              <div className="@container min-w-0 flex-1">
                 <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
                   {(['content', 'layout'] as const).map((id) => (
                     <button
@@ -474,7 +495,11 @@ export function Editor() {
                   {pane === 'content' ? (
                     <ProfileForm form={form} sections={document.sections} />
                   ) : (
-                    <DocumentControls document={document} onChange={setDocument} />
+                    <DocumentControls
+                      document={document}
+                      onChange={setDocument}
+                      onClear={() => setConfirmingClear(true)}
+                    />
                   )}
                 </div>
               </div>
@@ -499,7 +524,7 @@ export function Editor() {
           <div className="shrink-0 px-4 pt-4 sm:px-6 sm:pt-6">
             <div className="mx-auto flex w-full max-w-[680px] flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <Segmented
                     label="Paper size"
                     value={document.typography.paper}
@@ -514,7 +539,6 @@ export function Editor() {
                       }))
                     }
                   />
-                  <Button onClick={() => setConfirmingClear(true)}>Clear</Button>
                 </div>
                 <div className="flex items-center gap-2">
                   {rearrange && (
@@ -568,13 +592,16 @@ export function Editor() {
 
       {/* Below the large breakpoint both panes cannot fit, so one is shown at a
           time and this switches between them. */}
-      <div className="border-hairline bg-surface shrink-0 border-t p-3 lg:hidden">
+      <div className="border-hairline bg-surface flex shrink-0 gap-2 border-t p-3 lg:hidden">
         <Button
           variant="secondary"
-          className="w-full"
+          className="flex-1"
           onClick={() => setShowPreview((shown) => !shown)}
         >
           {showPreview ? 'Back to editing' : 'See the preview'}
+        </Button>
+        <Button variant="primary" onClick={download} disabled={!compiled.bytes}>
+          Download PDF
         </Button>
       </div>
     </div>
@@ -621,10 +648,16 @@ function BuildStatus({ compiled }: { compiled: ReturnType<typeof useCompiledPdf>
   return (
     <p className="text-muted text-micro font-mono">
       {compiled.status === 'compiling' && 'compiling…'}
-      {compiled.status === 'ready' &&
-        `compiled in ${compiled.elapsedMs}ms · ${compiled.pageCount} ${
-          compiled.pageCount === 1 ? 'page' : 'pages'
-        }`}
+      {compiled.status === 'ready' && (
+        <>
+          {/* How long it took is worth showing on a desk, where it answers "is
+              this keeping up" at a glance. On a phone it is what pushes the
+              buttons onto a second row, and the page count is the part that
+              changes what somebody does next. */}
+          <span className="hidden lg:inline">compiled in {compiled.elapsedMs}ms · </span>
+          {compiled.pageCount} {compiled.pageCount === 1 ? 'page' : 'pages'}
+        </>
+      )}
       {compiled.status === 'idle' && 'waiting'}
     </p>
   )

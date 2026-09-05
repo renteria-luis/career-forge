@@ -44,9 +44,12 @@ const SECTION_LABELS: Record<StandardSectionId, string> = {
 export function DocumentControls({
   document,
   onChange,
+  onClear,
 }: {
   document: ResumeDocument
   onChange: (next: ResumeDocument) => void
+  /** Removes the resume, the layout and the saved draft. Asks first. */
+  onClear: () => void
 }) {
   const setSections = (sections: DocumentSection[]) => onChange({ ...document, sections })
 
@@ -236,6 +239,21 @@ export function DocumentControls({
               }
             />
           ))}
+        </div>
+      </FormSection>
+
+      {/* It used to sit beside the paper size, in a row of formatting options,
+          styled like the button next to it. Clearing removes the resume, the
+          layout and the draft saved in this browser, and a control that does
+          that should not look like a choice between Letter and A4. */}
+      <FormSection title="Start over">
+        <p className="text-muted text-small">
+          Removes your resume, your layout and the draft saved in this browser.
+        </p>
+        <div>
+          <Button variant="danger" onClick={onClear}>
+            Clear everything
+          </Button>
         </div>
       </FormSection>
     </div>

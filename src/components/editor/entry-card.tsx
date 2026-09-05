@@ -34,10 +34,10 @@ export function EntryCard({
           enough to be in the way. */}
       <details open className="group/entry">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4">
-          <p className="text-muted text-micro flex min-w-0 items-center gap-1.5 font-mono uppercase">
+          <p className="text-strong text-small flex min-w-0 items-center gap-2 font-medium">
             <span
               aria-hidden
-              className="inline-block transition-transform group-open/entry:rotate-90"
+              className="text-muted inline-block transition-transform group-open/entry:rotate-90"
             >
               ›
             </span>
@@ -51,24 +51,26 @@ export function EntryCard({
           >
             {/* Buttons rather than drag handles: reordering has to work from a
               keyboard and on a phone, and a list this short does not need more. */}
-            <Button
-              variant="quiet"
-              aria-label="Move up"
-              disabled={index === 0}
-              onClick={() => onMove(-1)}
-              className="px-2"
-            >
-              ↑
-            </Button>
-            <Button
-              variant="quiet"
-              aria-label="Move down"
-              disabled={index === total - 1}
-              onClick={() => onMove(1)}
-              className="px-2"
-            >
-              ↓
-            </Button>
+            {index > 0 && (
+              <Button
+                variant="quiet"
+                aria-label="Move up"
+                onClick={() => onMove(-1)}
+                className="px-2"
+              >
+                ↑
+              </Button>
+            )}
+            {index < total - 1 && (
+              <Button
+                variant="quiet"
+                aria-label="Move down"
+                onClick={() => onMove(1)}
+                className="px-2"
+              >
+                ↓
+              </Button>
+            )}
             <Button variant="quiet" aria-label="Remove" onClick={onRemove} className="px-2">
               ✕
             </Button>

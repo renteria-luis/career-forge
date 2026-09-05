@@ -179,7 +179,7 @@ function ProfileLinks({ form }: { form: Form }) {
           ''
 
         return (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 @md:grid-cols-2">
             {/* The handle is what people know themselves by; the address is
                 what the document needs. Either can be typed. */}
             <Field
@@ -266,7 +266,7 @@ export const ProfileForm = memo(function ProfileForm({
                   onRemove={() => work.remove(index)}
                   onMove={(direction) => work.move(index, index + direction)}
                 >
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 @md:grid-cols-2">
                     <Field label="Role" {...register(`work.${index}.position`)} />
                     <Field label="Employer" {...register(`work.${index}.name`)} />
                     <Field
@@ -351,7 +351,7 @@ export const ProfileForm = memo(function ProfileForm({
                     names={[`projects.${index}.startDate`, `projects.${index}.endDate`]}
                     label="Add dates"
                   >
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 @md:grid-cols-2">
                       <Field
                         label="Started"
                         placeholder="2023-02"
@@ -422,7 +422,7 @@ export const ProfileForm = memo(function ProfileForm({
                   onMove={(direction) => education.move(index, index + direction)}
                 >
                   <Field label="Institution" {...register(`education.${index}.institution`)} />
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 @md:grid-cols-2">
                     <Field
                       label="Location"
                       placeholder="London, ON, Canada"
@@ -538,7 +538,7 @@ export const ProfileForm = memo(function ProfileForm({
                   onRemove={() => languages.remove(index)}
                   onMove={(direction) => languages.move(index, index + direction)}
                 >
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 @md:grid-cols-2">
                     <Field
                       label="Language"
                       placeholder="Spanish"
@@ -582,7 +582,7 @@ export const ProfileForm = memo(function ProfileForm({
                   onMove={(direction) => certificates.move(index, index + direction)}
                 >
                   <Field label="Name" {...register(`certificates.${index}.name`)} />
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 @md:grid-cols-2">
                     <Field label="Issued by" {...register(`certificates.${index}.issuer`)} />
                     <Field
                       label="Date"
@@ -609,7 +609,7 @@ export const ProfileForm = memo(function ProfileForm({
           placeholder="Data Analyst | SQL | Python"
           {...register('basics.label')}
         />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 @md:grid-cols-2">
           <Field
             label="Email"
             type="email"

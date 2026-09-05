@@ -229,11 +229,16 @@ export function Button({
   variant = 'secondary',
   className,
   ...props
-}: ComponentPropsWithoutRef<'button'> & { variant?: 'primary' | 'secondary' | 'quiet' }) {
+}: ComponentPropsWithoutRef<'button'> & {
+  variant?: 'primary' | 'secondary' | 'quiet' | 'danger'
+}) {
   const styles = {
     primary: 'bg-accent text-on-accent hover:opacity-90',
     secondary: 'border border-hairline text-strong hover:border-accent hover:text-accent',
     quiet: 'text-muted hover:text-accent',
+    // Outlined rather than filled: this is a control someone should be able to
+    // find deliberately and never press by passing over it.
+    danger: 'border border-flag/50 text-flag hover:bg-flag-sunk hover:border-flag',
   }[variant]
   return (
     <button
