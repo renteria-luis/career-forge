@@ -6,21 +6,39 @@ export const metadata: Metadata = {
 }
 
 const PALETTE = [
-  { name: 'paper', value: '#fcfbf9', use: 'Page. Bright proofing stock, not book cream.' },
-  { name: 'paper-sunk', value: '#f4f2ed', use: 'Recessed panels, table stripes.' },
-  { name: 'ink', value: '#1a1917', use: 'Body copy and headings.' },
-  { name: 'graphite', value: '#6b6862', use: 'Secondary copy, labels, help text.' },
-  { name: 'rule', value: '#e4e0d8', use: 'Hairlines and field borders.' },
-  { name: 'proof', value: '#23458c', use: 'Every interactive affordance. Nothing decorative.' },
   {
-    name: 'correction',
-    value: '#a83a26',
-    use: 'Validation errors and the smoke detector only. Lit to #f08a72 in dark.',
+    name: 'ledger',
+    value: '#e3e8dd',
+    use: 'The ground. Accounting paper, which is green because a page of figures read all day is easier on the eye that way. Never the document.',
+  },
+  { name: 'ledger-sunk', value: '#d6ddce', use: 'Recessed panels, the record beside the sheet.' },
+  {
+    name: 'sheet',
+    value: '#ffffff',
+    use: 'The document, and where a person writes. Pure white so it matches the PDF the preview draws.',
+  },
+  { name: 'ink', value: '#1e231c', use: 'Body copy, headings, and a check that passed.' },
+  { name: 'graphite', value: '#4c5348', use: 'Secondary copy, labels, help text.' },
+  { name: 'rule', value: '#bcc6b3', use: 'Field borders and the few dividers left.' },
+  {
+    name: 'bottle',
+    value: '#1f5f52',
+    use: 'Every interactive affordance, nothing decorative. The paper\u2019s own ruling, deepened, so it reads as part of the page rather than as a brand.',
   },
   {
-    name: 'tick',
-    value: '#2f6b46',
-    use: 'Checks that passed. Lit to #57a878 in dark.',
+    name: 'duplicator',
+    value: '#5b2a6e',
+    use: 'What a parser extracted, and nothing else. Never a button. Placed 115 degrees of hue from the action green and 62 from the correction red, because all three appear side by side in the check.',
+  },
+  {
+    name: 'correction',
+    value: '#941837',
+    use: 'Validation errors and the smoke detector only.',
+  },
+  {
+    name: 'faint',
+    value: '#9db79c',
+    use: 'Registration marks, and anything standing for what a machine does not receive. Below the contrast floor on purpose, so it never carries text.',
   },
 ]
 
@@ -86,14 +104,16 @@ export default function DesignSystemPage() {
         <p className="text-muted max-w-measure text-body mt-4">
           Every value here lives in{' '}
           <code className="text-small font-mono">src/styles/tokens.css</code>. Components reference
-          the semantic names, never raw hex or pixels, so the look changes in one file.
+          the semantic names, never raw hex or pixels, so the look changes in one file. The
+          direction is a light table: the ground is a platen, the sheet is the only white object on
+          it, and the colour marks which of the two readers received what.
         </p>
       </header>
 
       <div className="flex flex-col gap-14">
         <Section
           title="Type"
-          note="Newsreader carries the personality and only appears at display sizes. Instrument Sans does the work — this app is mostly dense forms, and forms are won at 14px. IBM Plex Mono marks anything the machine produced rather than the human."
+          note="Archivo appears only at display sizes and is carried at 115% width, which is what makes a heading read as the top of a form rather than the top of an article. Public Sans does the work — it is the face of the US Web Design System, drawn for government forms, and this app is mostly a long form. DM Mono marks anything a machine produced rather than a person."
         >
           <dl className="flex flex-col">
             {SCALE.map((step) => (
@@ -111,7 +131,7 @@ export default function DesignSystemPage() {
 
         <Section
           title="Colour"
-          note="Two accents, both semantic. Blue is the non-repro pencil used to mark up a galley proof — it means acting on something. Red is a correction mark and means something needs attention. Neither is ever decorative."
+          note="Light only: one set of values, no theme to flip. Colour is spent on saying which reader got what, not on branding the controls. Violet marks what a parser extracted and appears nowhere else. The deepened ledger green marks everything a person can act on. Red is a correction. A check that passed carries no colour at all, because the tick already says so. Nothing here is decorative."
         >
           <ul className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
             {PALETTE.map((swatch) => (

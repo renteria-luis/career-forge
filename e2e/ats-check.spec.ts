@@ -42,17 +42,20 @@ const complete = {
 }
 
 test.describe('the page itself', () => {
-  test('explains what it does without a file', async ({ page }) => {
-    // Most visitors read before they drop anything, and many never drop at all.
+  test('is a title and the control, and nothing above it', async ({ page }) => {
     await page.goto('/ats-check')
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('the way a machine does')
-    await expect(page.getByText('What is an applicant tracking system?')).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ATS checker')
     await expect(page.getByText('Drop your resume here')).toBeVisible()
+
+    // Somebody arrived here to use a tool. The explanation is a link away, and
+    // this asserts it did not creep back above the control.
+    await expect(page.getByText('What is an applicant tracking system?')).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'How it works' })).toBeVisible()
   })
 
   test('is reachable from the home page', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('link', { name: 'Check your resume' }).click()
+    await page.getByRole('link', { name: /Drop a PDF/ }).click()
     await expect(page).toHaveURL(/\/ats-check$/)
   })
 })

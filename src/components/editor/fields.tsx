@@ -12,7 +12,7 @@ import type { ComponentPropsWithoutRef, ReactNode, Ref } from 'react'
  */
 
 const control =
-  'w-full rounded-edge border border-hairline bg-surface px-3 py-2 text-body text-strong ' +
+  'w-full rounded-edge border border-hairline bg-field px-3 py-2 text-body text-strong ' +
   'placeholder:text-muted/70 focus:border-accent focus:outline-none ' +
   'aria-[invalid=true]:border-flag'
 

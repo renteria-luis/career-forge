@@ -5,9 +5,9 @@ import { AtsCheckLoader } from '@/components/ats/ats-check-loader'
 /**
  * The public check. No account, no upload, no stored file.
  *
- * This is the page people arrive on, so it is written to be read rather than
- * operated: the explanation stands on its own whether or not anyone drops a
- * file on it.
+ * A title and the control, and nothing else above it. This is a tool somebody
+ * arrived to use; what an applicant tracking system is, and why there is no
+ * score out of a hundred, are at /how-it-works for whoever wants them.
  */
 export const metadata: Metadata = {
   title: 'ATS resume checker',
@@ -22,61 +22,24 @@ export const metadata: Metadata = {
   },
 }
 
-const QUESTIONS = [
-  {
-    q: 'What is an applicant tracking system?',
-    a: 'Software an employer uses to receive and search applications. It reads your PDF into fields — name, dates, employers, skills — and recruiters search those fields. Anything it cannot read is effectively not on your resume.',
-  },
-  {
-    q: 'Why not a score out of a hundred?',
-    a: 'Because nobody can check it and nothing can be done about it. Every system parses differently, so a single number is a guess dressed up as a measurement. What is useful is the thing itself: the fields that came out, and the order the page was read in.',
-  },
-  {
-    q: 'Does my file get uploaded?',
-    a: 'No. It is read where it sits, by code already on the page, and nothing is sent anywhere. Open your network tab and check.',
-  },
-  {
-    q: 'What breaks a resume most often?',
-    a: 'Two columns. A parser walks the page left to right, so two columns interleave into one scrambled stream. After that: text in the header or footer, which many systems skip entirely, and a scan with no text layer, which reads as an empty document.',
-  },
-]
-
 export default function AtsCheckPage() {
   return (
     <main className="mx-auto w-full max-w-3xl px-6 py-16 sm:py-20">
-      <p className="text-muted text-micro font-mono uppercase">Free · no account</p>
-      <h1 className="text-strong font-display text-display-l mt-4">
-        See your resume the way a machine does.
-      </h1>
-      <p className="text-muted max-w-measure text-body mt-5">
-        An applicant tracking system does not read your resume. It extracts fields from it, and
-        recruiters search those fields. Drop your PDF below to see which ones come out, which ones
-        do not, and the order the page is read in.
-      </p>
-      <p className="text-muted max-w-measure text-body mt-3">
-        The reading happens in your browser. There is no endpoint here that receives a file.
-      </p>
+      <Link href="/" className="text-accent text-small">
+        Career Forge
+      </Link>
+
+      <h1 className="text-strong font-display text-display-l mt-6 font-semibold">ATS checker</h1>
 
       <div className="mt-10">
         <AtsCheckLoader />
       </div>
 
-      <section className="mt-20">
-        <h2 className="text-strong font-display text-display-m">Questions</h2>
-        <dl className="mt-6 flex flex-col">
-          {QUESTIONS.map((item) => (
-            <div key={item.q} className="border-hairline border-t py-5">
-              <dt className="text-strong font-medium">{item.q}</dt>
-              <dd className="text-muted max-w-measure text-small mt-2">{item.a}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <p className="text-muted max-w-measure text-small mt-16">
-        Career Forge builds resumes from structured data, so what a parser reads is decided by the
-        template rather than left to chance.{' '}
-        <Link href="/" className="text-accent border-b border-current pb-0.5">
+      <p className="mt-10">
+        <Link
+          href="/how-it-works"
+          className="text-accent text-small border-b border-current pb-0.5"
+        >
           How it works
         </Link>
       </p>

@@ -10,8 +10,15 @@ import type { Check, CheckStatus } from '@/lib/ats/report'
  * what to change, and the reader can check both against their own file.
  */
 
+/**
+ * A pass carries no colour.
+ *
+ * The glyph already says it, and the report exists to surface problems: green
+ * for "fine" would be the third meaning of one hue on a page whose action
+ * colour is already green. Colour here is reserved for the rows worth reading.
+ */
 const MARK: Record<CheckStatus, { glyph: string; className: string; label: string }> = {
-  pass: { glyph: '✓', className: 'text-confirm', label: 'Passed' },
+  pass: { glyph: '✓', className: 'text-muted', label: 'Passed' },
   warn: { glyph: '!', className: 'text-flag', label: 'Worth checking' },
   fail: { glyph: '✕', className: 'text-flag', label: 'Problem' },
 }
