@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { isBodyTooLarge, withBoundedBody } from '@/lib/http/bounded-body'
+import { refuseIfOverLimit } from '@/lib/http/limits'
 import { extractLines } from '@/lib/parse/extract'
 import { parseResume } from '@/lib/parse/parse'
 
@@ -16,14 +18,38 @@ import { parseResume } from '@/lib/parse/parse'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-/** Ten megabytes is a very large resume; anything past it is not one. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+/**
+ * Six megabytes is a very large resume; anything past it is not one.
+ *
+ * The figure is what the instance can hold, not what a document might want. At
+ * `--concurrency 40` the ceiling arrives forty times at once, and 40 × 6 MB on
+ * top of a 159 MB baseline is 399 MB inside a 512 MiB instance. It was ten,
+ * which is 559 MB and over.
+ */
+const MAX_UPLOAD_BYTES = 6 * 1024 * 1024
+
+/**
+ * What the whole multipart body may weigh: the file, plus the part headers and
+ * boundaries wrapped around it.
+ *
+ * This is the ceiling that does the work. `file.size` can only be read once
+ * `formData()` has decoded the body, so a check on it is a verdict delivered
+ * after the memory has already been spent — measured at 1,085 MB of RSS for one
+ * 300 MB upload, which on this instance is an OOM kill and no reply at all.
+ */
+const MAX_MULTIPART_BYTES = MAX_UPLOAD_BYTES + 64 * 1024
 
 export async function POST(request: Request) {
+  const refused = refuseIfOverLimit(request, 'import')
+  if (refused) return refused
+
   let form: FormData
   try {
-    form = await request.formData()
-  } catch {
+    form = await withBoundedBody(request, MAX_MULTIPART_BYTES).formData()
+  } catch (cause) {
+    if (isBodyTooLarge(cause)) {
+      return NextResponse.json({ error: 'That file is larger than 6 MB.' }, { status: 413 })
+    }
     return NextResponse.json({ error: 'Expected a file upload.' }, { status: 400 })
   }
 
@@ -34,8 +60,11 @@ export async function POST(request: Request) {
   if (file.size === 0) {
     return NextResponse.json({ error: 'That file is empty.' }, { status: 400 })
   }
+  // The stream ceiling above already refused anything past this. Kept as the
+  // one that names the file rather than the envelope, so the message is about
+  // what the person attached.
   if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: 'That file is larger than 10 MB.' }, { status: 413 })
+    return NextResponse.json({ error: 'That file is larger than 6 MB.' }, { status: 413 })
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer())

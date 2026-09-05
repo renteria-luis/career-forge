@@ -132,19 +132,70 @@ them.
    is the point.
 3. **A spend limit on the model provider workspace**, set before any key is
    created. See `docs/accounts-and-billing.md`.
-4. **`MAX_BODY_BYTES`** in `src/app/api/compile/route.ts`, enforced at 512 KB
-   by counting the bytes that arrive. Compiling attacker-supplied documents is
-   a denial-of-service surface and the ceiling is what makes it a bounded one.
-   It was measured against `content-length` at first, which a chunked request
-   simply omits — 60 MB then arrived and compiled in 48 s. Trusting a header
-   the sender writes is not a limit.
+4. **Body ceilings**, counted on the bytes that arrive rather than read off a
+   header, in `src/lib/http/bounded-body.ts`. 512 KB for a compile, 6 MB for an
+   upload. Serving attacker-supplied documents is a denial-of-service surface
+   and the ceiling is what makes it a bounded one. Both endpoints got this
+   wrong once, in the same way and for the same reason — see below.
+5. **Rate limits** on both public endpoints, in `src/lib/http/limits.ts`. The
+   ceilings above bound one request; these bound how many.
+
+## The ceilings that were not ceilings
+
+Both public endpoints once trusted a size the sender supplied, and both were
+measured rather than reasoned about.
+
+`/api/compile` read `content-length`, which a chunked request simply omits. 60
+MB then arrived and compiled in 48 s.
+
+`/api/import` looked more careful and was worse. It called `formData()` and then
+checked `file.size` — a number only knowable once the whole body is decoded and
+in memory. Measured against the deployment's own 512 MiB:
+
+| 300 MB upload, no `content-length` | Before                       | After              |
+| ---------------------------------- | ---------------------------- | ------------------ |
+| Bytes accepted                     | all 300 MB                   | stops at 11 MB     |
+| Time to refuse                     | 577 ms                       | 26 ms              |
+| Peak RSS                           | 1,085 MB                     | 154 MB             |
+| Outcome at 512 MiB                 | **process killed, no reply** | 413, still serving |
+
+One anonymous request took the service down. The tidy 413 it returns on a
+machine with spare memory is a message printed after the damage, not a limit.
+
+The general shape is worth keeping: **a size a caller tells you is not a
+measurement, and neither is one you can only take after buffering.**
+
+## Rate limits
+
+Token buckets, in memory, per instance. That is exact rather than approximate
+because `--max-instances 1` means one instance is the whole service; a second
+instance would need a shared store, and this note is the reminder.
+
+|                | Per caller      | Global           |
+| -------------- | --------------- | ---------------- |
+| `/api/compile` | 60 burst, 6/s   | 600 burst, 120/s |
+| `/api/import`  | 10 burst, 0.5/s | 120 burst, 30/s  |
+
+The per-caller figures come from what the app produces: the preview debounces
+at 250 ms, so a tab being typed into cannot exceed four compiles a second.
+The global figures come from what an instance costs to serve — 5.7 ms a compile
+and 11.9 ms an import, so each ceiling is roughly two thirds of a core.
+
+**Per-caller keys on the last `X-Forwarded-For` entry, not the first.** Google's
+load balancer appends to whatever header arrived and does not verify what
+precedes it, so the leftmost entry is whatever the caller typed. Reading
+position 0 — which is what most examples do — turns a per-address limit into a
+per-header-value one, and rotating the header restores a full allowance on every
+request. `TRUSTED_PROXY_HOPS` says how many hops to count back if a load
+balancer or CDN is ever put in front.
+
+The global bucket exists because that reasoning could still be wrong. It keys on
+nothing a caller controls, so it holds whatever happens to the address.
 
 ## What is still missing before public mode
 
-- A rate limit on `/api/compile`. The route's own comment says so. It is
-  reachable without an account and compiles arbitrary documents. The size
-  ceiling bounds one request; nothing yet bounds their number.
 - A registered domain, mapped to the service. Cloud Run domain mapping and its
   TLS certificate are free.
 - `--min-instances 1`, which leaves the free tier. The allowance is 50 hours of
   vCPU per month and an always-warm instance consumes 720.
+- A shared store for the rate limits, the moment `--max-instances` goes above 1.
