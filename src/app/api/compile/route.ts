@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { readBoundedText } from '@/lib/http/bounded-body'
+import { refuseIfOverLimit } from '@/lib/http/limits'
 import { resumeDocument } from '@/lib/resume/document'
 import { profile } from '@/lib/resume/profile'
 import { TypstCompileError, compileResume } from '@/lib/typst/compile'
@@ -13,8 +14,8 @@ import { TypstCompileError, compileResume } from '@/lib/typst/compile'
  * response and no longer.
  *
  * Compiling attacker-supplied documents on demand is a denial-of-service
- * surface. The size ceiling below counts the bytes that arrive; before this is
- * reachable without an account it also needs a rate limit.
+ * surface, bounded in two directions: the size ceiling counts the bytes of one
+ * request, and the rate limit counts the requests.
  */
 
 export const runtime = 'nodejs'
@@ -29,6 +30,9 @@ const body = z.object({
 const MAX_BODY_BYTES = 512 * 1024
 
 export async function POST(request: Request) {
+  const refused = refuseIfOverLimit(request, 'compile')
+  if (refused) return refused
+
   const raw = await readBoundedText(request, MAX_BODY_BYTES)
   if (raw === null) {
     return NextResponse.json({ error: 'That document is too large to compile.' }, { status: 413 })

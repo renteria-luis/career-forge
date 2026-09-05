@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isBodyTooLarge, withBoundedBody } from '@/lib/http/bounded-body'
+import { refuseIfOverLimit } from '@/lib/http/limits'
 import { extractLines } from '@/lib/parse/extract'
 import { parseResume } from '@/lib/parse/parse'
 
@@ -39,6 +40,9 @@ const MAX_UPLOAD_BYTES = 6 * 1024 * 1024
 const MAX_MULTIPART_BYTES = MAX_UPLOAD_BYTES + 64 * 1024
 
 export async function POST(request: Request) {
+  const refused = refuseIfOverLimit(request, 'import')
+  if (refused) return refused
+
   let form: FormData
   try {
     form = await withBoundedBody(request, MAX_MULTIPART_BYTES).formData()

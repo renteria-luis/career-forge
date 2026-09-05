@@ -137,6 +137,8 @@ them.
    upload. Serving attacker-supplied documents is a denial-of-service surface
    and the ceiling is what makes it a bounded one. Both endpoints got this
    wrong once, in the same way and for the same reason — see below.
+5. **Rate limits** on both public endpoints, in `src/lib/http/limits.ts`. The
+   ceilings above bound one request; these bound how many.
 
 ## The ceilings that were not ceilings
 
@@ -163,11 +165,37 @@ machine with spare memory is a message printed after the damage, not a limit.
 The general shape is worth keeping: **a size a caller tells you is not a
 measurement, and neither is one you can only take after buffering.**
 
+## Rate limits
+
+Token buckets, in memory, per instance. That is exact rather than approximate
+because `--max-instances 1` means one instance is the whole service; a second
+instance would need a shared store, and this note is the reminder.
+
+|                | Per caller      | Global           |
+| -------------- | --------------- | ---------------- |
+| `/api/compile` | 60 burst, 6/s   | 600 burst, 120/s |
+| `/api/import`  | 10 burst, 0.5/s | 120 burst, 30/s  |
+
+The per-caller figures come from what the app produces: the preview debounces
+at 250 ms, so a tab being typed into cannot exceed four compiles a second.
+The global figures come from what an instance costs to serve — 5.7 ms a compile
+and 11.9 ms an import, so each ceiling is roughly two thirds of a core.
+
+**Per-caller keys on the last `X-Forwarded-For` entry, not the first.** Google's
+load balancer appends to whatever header arrived and does not verify what
+precedes it, so the leftmost entry is whatever the caller typed. Reading
+position 0 — which is what most examples do — turns a per-address limit into a
+per-header-value one, and rotating the header restores a full allowance on every
+request. `TRUSTED_PROXY_HOPS` says how many hops to count back if a load
+balancer or CDN is ever put in front.
+
+The global bucket exists because that reasoning could still be wrong. It keys on
+nothing a caller controls, so it holds whatever happens to the address.
+
 ## What is still missing before public mode
 
-- A rate limit on both public endpoints. The size ceilings bound one request;
-  nothing yet bounds their number.
 - A registered domain, mapped to the service. Cloud Run domain mapping and its
   TLS certificate are free.
 - `--min-instances 1`, which leaves the free tier. The allowance is 50 hours of
   vCPU per month and an always-warm instance consumes 720.
+- A shared store for the rate limits, the moment `--max-instances` goes above 1.
