@@ -43,6 +43,7 @@ export function SectionIndex({ titles }: { titles: string[] }) {
 
   return (
     <nav aria-label="Sections" className="sticky top-6 hidden shrink-0 self-start lg:block">
+      <p className="text-ghost text-micro mb-1.5 pl-3 font-mono uppercase">Sections</p>
       <ul className="border-hairline flex flex-col gap-0.5 border-l py-1">
         {titles.map((title) => {
           const current = title === active
@@ -56,13 +57,15 @@ export function SectionIndex({ titles }: { titles: string[] }) {
                     ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
                 }
                 aria-current={current ? 'true' : undefined}
-                className={`group flex w-full items-center gap-2 py-1 pr-1 text-left transition-colors ${
-                  current ? 'text-accent' : 'text-muted hover:text-strong'
+                className={`group rounded-r-edge flex w-full items-center gap-2 py-1.5 pr-2 text-left transition-colors ${
+                  current
+                    ? 'text-accent bg-accent-sunk'
+                    : 'text-muted hover:text-strong hover:bg-surface-sunk'
                 }`}
               >
                 <span
                   aria-hidden
-                  className={`h-px transition-all ${current ? 'bg-accent w-3' : 'bg-hairline group-hover:bg-muted w-1.5'}`}
+                  className={`h-px transition-all ${current ? 'bg-accent w-4' : 'bg-hairline group-hover:bg-muted w-2'}`}
                 />
                 <span className="text-micro font-mono whitespace-nowrap uppercase">{title}</span>
               </button>
