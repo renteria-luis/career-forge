@@ -41,13 +41,14 @@ function LineList({
   form,
   name,
   label,
-  hint,
+  placeholder,
 }: {
   form: Form
   name:
     `work.${number}.highlights` | `projects.${number}.highlights` | `education.${number}.courses`
   label: string
-  hint: string
+  /** Two lines, because showing two is how "one per line" gets said. */
+  placeholder?: string
 }) {
   return (
     <Controller
@@ -56,7 +57,7 @@ function LineList({
       render={({ field }) => (
         <TextArea
           label={label}
-          hint={hint}
+          placeholder={placeholder}
           rows={4}
           name={field.name}
           ref={field.ref}
@@ -123,13 +124,11 @@ function KeywordField({
   form,
   name,
   label,
-  hint,
   placeholder,
 }: {
   form: Form
   name: `projects.${number}.keywords` | `skills.${number}.keywords`
   label: string
-  hint: string
   placeholder?: string
 }) {
   return (
@@ -139,7 +138,6 @@ function KeywordField({
       render={({ field }) => (
         <KeywordInput
           label={label}
-          hint={hint}
           placeholder={placeholder}
           name={field.name}
           inputRef={field.ref}
@@ -274,8 +272,7 @@ export const ProfileForm = memo(function ProfileForm({
                     />
                     <Field
                       label="Ended"
-                      hint="Leave empty if this is your current role."
-                      placeholder="2024-06"
+                      placeholder="Still here"
                       error={errors.work?.[index]?.endDate?.message}
                       {...register(`work.${index}.endDate`)}
                     />
@@ -285,7 +282,6 @@ export const ProfileForm = memo(function ProfileForm({
                       neither shape answer a question that does not fit. */}
                   <Field
                     label="Location"
-                    hint="However you write it — a city, a country, or both."
                     placeholder="Toronto, ON, Canada"
                     {...register(`work.${index}.location`)}
                   />
@@ -307,7 +303,7 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     name={`work.${index}.highlights`}
                     label="What you did"
-                    hint="One per line. Lead with the outcome and put a number on it."
+                    placeholder={'Cut retrieval latency from 240ms to 45ms.\nLed a team of four.'}
                   />
                 </EntryCard>
               ))}
@@ -354,8 +350,7 @@ export const ProfileForm = memo(function ProfileForm({
                       />
                       <Field
                         label="Ended"
-                        hint="Leave empty if you are still working on it."
-                        placeholder="2024-06"
+                        placeholder="Still going"
                         error={errors.projects?.[index]?.endDate?.message}
                         {...register(`projects.${index}.endDate`)}
                       />
@@ -366,7 +361,6 @@ export const ProfileForm = memo(function ProfileForm({
                       form={form}
                       name={`projects.${index}.keywords`}
                       label="Built with"
-                      hint="Separated by commas."
                       placeholder="Python, Pandas, SQL"
                     />
                   </WhenSet>
@@ -382,7 +376,9 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     name={`projects.${index}.highlights`}
                     label="What you did and what came of it"
-                    hint="One per line. Lead with the outcome and put a number on it."
+                    placeholder={
+                      'Shipped the ranking model behind the search box.\nCut build times by half.'
+                    }
                   />
                 </EntryCard>
               ))}
@@ -451,7 +447,7 @@ export const ProfileForm = memo(function ProfileForm({
                       form={form}
                       name={`education.${index}.courses`}
                       label="Details"
-                      hint="One per line. GPA, honours, coursework worth naming."
+                      placeholder={'First-class honours\nDistributed Systems, Compilers'}
                     />
                   </WhenSet>
                 </EntryCard>
@@ -489,7 +485,6 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     name={`skills.${index}.keywords`}
                     label="Skills"
-                    hint="Separated by commas. Only list what you could be asked about."
                     placeholder="PyTorch, scikit-learn"
                   />
                 </EntryCard>
@@ -581,7 +576,6 @@ export const ProfileForm = memo(function ProfileForm({
         <Field label="Full name" {...register('basics.name')} placeholder="James Smith" />
         <Field
           label="Headline"
-          hint="Sits under your name. Leave it empty if you would rather not have one."
           placeholder="Data Analyst | SQL | Python"
           {...register('basics.label')}
         />
@@ -613,7 +607,7 @@ export const ProfileForm = memo(function ProfileForm({
         {has('summary') && (
           <TextArea
             label="Summary"
-            hint="Two or three sentences. What you do, and the evidence for it."
+            placeholder={'Two or three sentences. What you do, and the evidence for it.'}
             {...register('basics.summary')}
           />
         )}
