@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import { canSwap, toBands, type Band } from '@/lib/editor/rearrange'
 import type { LayoutBlock } from '@/lib/typst/compile'
 
@@ -22,6 +23,20 @@ export interface DragState {
   onGrab: (id: string) => void
   onEnter: (id: string) => void
   onLeave: (id: string) => void
+  /**
+   * Sets the target outright, for when the pointer did not move but what is
+   * under it did — which is what happens while the pane scrolls at an edge.
+   */
+  onHover: (id: string | null) => void
+  /**
+   * Set while the pane is scrolling itself at an edge.
+   *
+   * A pane scrolling under a still pointer makes the browser fire pointerleave
+   * on the band that moved away, exactly as if the pointer had left it. It has
+   * not: the content moved, and the target has to survive that or reaching the
+   * end of the document loses it. `onLeave` reads this and stands down.
+   */
+  scrolling: RefObject<boolean>
 }
 
 export function RearrangeOverlay({
@@ -81,6 +96,7 @@ export function RearrangeOverlay({
 export function useBlockDrag(onReorder: (fromId: string, toId: string) => void): DragState {
   const [dragging, setDragging] = useState<string | null>(null)
   const [over, setOver] = useState<string | null>(null)
+  const scrolling = useRef(false)
 
   useEffect(() => {
     if (!dragging) return
@@ -107,8 +123,16 @@ export function useBlockDrag(onReorder: (fromId: string, toId: string) => void):
       if (dragging) setOver(id)
     },
     // Releasing over the gap between pages should do nothing rather than drop
-    // the block on whatever it last passed over.
-    onLeave: (id) => setOver((current) => (current === id ? null : current)),
+    // the block on whatever it last passed over. Only when the pointer is what
+    // moved, though — see `scrolling`.
+    onLeave: (id) => {
+      if (scrolling.current) return
+      setOver((current) => (current === id ? null : current))
+    },
+    onHover: (id) => {
+      if (dragging) setOver(id)
+    },
+    scrolling,
   }
 }
 
@@ -136,6 +160,8 @@ function BandStrip({
       role="button"
       tabIndex={0}
       aria-label={`Move ${label}`}
+      // Read back by the edge scroll to say what the pointer is over now.
+      data-band={band.id}
       onPointerDown={(event) => {
         event.preventDefault()
         onGrab()

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PDFDocumentLoadingTask } from 'pdfjs-dist'
 import { loadPdfjs } from '@/lib/parse/pdfjs'
+import { useEdgeScroll } from '@/lib/editor/edge-scroll'
 import { scrollingAncestor } from '@/lib/editor/follow'
 import type { CompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import type { LayoutBlock } from '@/lib/typst/compile'
@@ -61,6 +62,9 @@ export function Preview({
   const [width, setWidth] = useState(0)
   // One drag, shared by every page, so a block can be dropped on the other one.
   const drag = useBlockDrag(onReorder ?? (() => {}))
+  // Holding a block against the top or bottom of the pane scrolls it, so a move
+  // from page one to page two does not need the wheel turned at the same time.
+  useEdgeScroll(containerRef, drag.dragging !== null, drag.onHover, drag.scrolling)
 
   useEffect(() => {
     const element = containerRef.current
