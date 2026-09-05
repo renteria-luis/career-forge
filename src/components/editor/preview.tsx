@@ -217,7 +217,7 @@ function CanvasFrame({
 
   return (
     <figure className="flex flex-col gap-1.5">
-      <div className="border-hairline rounded-edge relative overflow-hidden border bg-white shadow-sm">
+      <div className="rounded-edge shadow-sheet bg-sheet relative overflow-hidden">
         <div
           ref={holder}
           onClick={handleClick}

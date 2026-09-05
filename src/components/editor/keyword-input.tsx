@@ -170,7 +170,7 @@ export function KeywordInput({
           }}
           // Typing a keyword and clicking away should not throw it away.
           onBlur={() => commit(draft)}
-          className="rounded-edge border-hairline bg-surface text-body text-strong placeholder:text-muted/70 focus:border-accent w-full border px-3 py-2 focus:outline-none"
+          className="rounded-edge border-hairline bg-field text-body text-strong placeholder:text-muted/70 focus:border-accent w-full border px-3 py-2 focus:outline-none"
         />
         <Button className="shrink-0" onClick={() => commit(draft)} disabled={draft.trim() === ''}>
           Add
