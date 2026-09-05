@@ -823,3 +823,41 @@ test.describe('import and export', () => {
     )
   })
 })
+
+/**
+ * A select, a range and a checkbox arrive with the operating system's own
+ * chrome, and the settings pane was the one screen in the app still wearing it.
+ */
+test.describe('the settings controls are drawn by the app', () => {
+  test('none of the three are left as the browser draws them', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'Layout' }).click()
+
+    const appearances = await page.evaluate(() =>
+      ['select', 'input[type=range]', 'input[type=checkbox]'].map((selector) => {
+        const element = document.querySelector(selector)
+        return element ? getComputedStyle(element).appearance : 'missing'
+      }),
+    )
+    expect(appearances).toEqual(['none', 'none', 'none'])
+  })
+
+  test('the slider track fills to where the handle is', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'Layout' }).click()
+
+    // A track cannot know where its thumb is, so the share is handed to CSS.
+    // Without it the control says nothing until you look at the handle.
+    const fill = () =>
+      page
+        .locator('input[type=range]')
+        .first()
+        .evaluate((element) => (element as HTMLElement).style.getPropertyValue('--fill'))
+
+    const before = await fill()
+    expect(before).toMatch(/%$/)
+
+    await page.locator('input[type=range]').first().press('ArrowRight')
+    await expect.poll(fill).not.toBe(before)
+  })
+})
