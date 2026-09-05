@@ -152,11 +152,11 @@ export function DocumentControls({
 
         <Slider
           label="Body size"
-          value={`${document.typography.size} pt`}
+          readout={`${document.typography.size} pt`}
           min={FONT_SIZE_MIN}
           max={FONT_SIZE_MAX}
           step={0.5}
-          defaultValue={document.typography.size}
+          value={document.typography.size}
           onChange={(event) =>
             onChange({
               ...document,
@@ -167,11 +167,11 @@ export function DocumentControls({
 
         <Slider
           label="Margin"
-          value={`${document.typography.margin} px`}
+          readout={`${document.typography.margin} px`}
           min={MARGIN_MIN}
           max={MARGIN_MAX}
           step={MARGIN_STEP}
-          defaultValue={document.typography.margin}
+          value={document.typography.margin}
           onChange={(event) =>
             onChange({
               ...document,
@@ -182,11 +182,11 @@ export function DocumentControls({
 
         <Slider
           label="Spacing"
-          value={`${document.typography.density.toFixed(2)}×`}
+          readout={`${document.typography.density.toFixed(2)}×`}
           min={0.85}
           max={1.25}
           step={0.05}
-          defaultValue={document.typography.density}
+          value={document.typography.density}
           onChange={(event) =>
             onChange({
               ...document,
@@ -197,11 +197,11 @@ export function DocumentControls({
 
         <Slider
           label="Page limit"
-          value={`${document.options.maxPages} ${document.options.maxPages === 1 ? 'page' : 'pages'}`}
+          readout={`${document.options.maxPages} ${document.options.maxPages === 1 ? 'page' : 'pages'}`}
           min={1}
           max={4}
           step={1}
-          defaultValue={document.options.maxPages}
+          value={document.options.maxPages}
           onChange={(event) =>
             onChange({
               ...document,

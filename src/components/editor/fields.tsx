@@ -1,7 +1,7 @@
 'use client'
 
 import { useId } from 'react'
-import type { ComponentPropsWithoutRef, ReactNode, Ref } from 'react'
+import type { CSSProperties, ComponentPropsWithoutRef, ReactNode, Ref } from 'react'
 
 /**
  * Form primitives.
@@ -108,9 +108,13 @@ export function Select({ label, hint, className, children, ...props }: SelectPro
   return (
     <div className={`flex flex-col gap-1.5 ${className ?? ''}`}>
       <Label htmlFor={id}>{label}</Label>
-      <select id={id} className={control} {...props}>
-        {children}
-      </select>
+      {/* The wrapper draws the chevron. The select keeps its own behaviour and
+          gives up only the chrome — see `control-select` in tokens.css. */}
+      <div className="control-select-wrap">
+        <select id={id} className={`${control} control-select`} {...props}>
+          {children}
+        </select>
+      </div>
       {hint && <p className="text-muted text-small">{hint}</p>}
     </div>
   )
@@ -119,18 +123,40 @@ export function Select({ label, hint, className, children, ...props }: SelectPro
 interface SliderProps extends Omit<ComponentPropsWithoutRef<'input'>, 'id' | 'type'> {
   label: string
   /** Rendered next to the label, e.g. "10.5 pt". */
-  value: string
+  readout: string
+  /**
+   * Controlled, where it used to be seeded with `defaultValue`.
+   *
+   * The number had to come back out for the track to know how far to fill, and
+   * a value that only exists in the DOM cannot answer that. It also fixes a
+   * quieter bug: "Clear everything" reset the typography and the handles stayed
+   * where they were, because nothing had told them.
+   */
+  value: number
 }
 
-export function Slider({ label, value, className, ...props }: SliderProps) {
+export function Slider({ label, readout, value, className, ...props }: SliderProps) {
   const id = useId()
+  // A track cannot know where its own thumb is, so the filled share is handed
+  // to CSS. Without it the slider says nothing until you look at the handle.
+  const min = Number(props.min ?? 0)
+  const max = Number(props.max ?? 100)
+  const fill = max > min ? ((value - min) / (max - min)) * 100 : 0
+
   return (
     <div className={`flex flex-col gap-1.5 ${className ?? ''}`}>
       <div className="flex items-baseline justify-between gap-3">
         <Label htmlFor={id}>{label}</Label>
-        <span className="text-muted text-micro font-mono">{value}</span>
+        <span className="text-muted text-micro font-mono">{readout}</span>
       </div>
-      <input id={id} type="range" className="accent-accent w-full" {...props} />
+      <input
+        id={id}
+        type="range"
+        value={value}
+        className="control-range"
+        style={{ '--fill': `${fill}%` } as CSSProperties}
+        {...props}
+      />
     </div>
   )
 }
@@ -152,7 +178,7 @@ export function Toggle({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="accent-accent size-4 shrink-0"
+        className="control-check"
       />
       <label htmlFor={id} className="text-strong text-small select-none">
         {label}

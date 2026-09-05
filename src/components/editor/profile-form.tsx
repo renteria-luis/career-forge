@@ -41,13 +41,14 @@ function LineList({
   form,
   name,
   label,
-  hint,
+  placeholder,
 }: {
   form: Form
   name:
     `work.${number}.highlights` | `projects.${number}.highlights` | `education.${number}.courses`
   label: string
-  hint: string
+  /** Two lines, because showing two is how "one per line" gets said. */
+  placeholder?: string
 }) {
   return (
     <Controller
@@ -56,7 +57,7 @@ function LineList({
       render={({ field }) => (
         <TextArea
           label={label}
-          hint={hint}
+          placeholder={placeholder}
           rows={4}
           name={field.name}
           ref={field.ref}
@@ -123,13 +124,11 @@ function KeywordField({
   form,
   name,
   label,
-  hint,
   placeholder,
 }: {
   form: Form
   name: `projects.${number}.keywords` | `skills.${number}.keywords`
   label: string
-  hint: string
   placeholder?: string
 }) {
   return (
@@ -139,7 +138,6 @@ function KeywordField({
       render={({ field }) => (
         <KeywordInput
           label={label}
-          hint={hint}
           placeholder={placeholder}
           name={field.name}
           inputRef={field.ref}
@@ -246,13 +244,18 @@ export const ProfileForm = memo(function ProfileForm({
     switch (id) {
       case 'work':
         return (
-          <FormSection title={formBlockTitle(id)} count={work.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={work.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {work.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={work.fields.length}
+                  blockId={`work.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -274,8 +277,7 @@ export const ProfileForm = memo(function ProfileForm({
                     />
                     <Field
                       label="Ended"
-                      hint="Leave empty if this is your current role."
-                      placeholder="2024-06"
+                      placeholder="Still here"
                       error={errors.work?.[index]?.endDate?.message}
                       {...register(`work.${index}.endDate`)}
                     />
@@ -285,7 +287,6 @@ export const ProfileForm = memo(function ProfileForm({
                       neither shape answer a question that does not fit. */}
                   <Field
                     label="Location"
-                    hint="However you write it — a city, a country, or both."
                     placeholder="Toronto, ON, Canada"
                     {...register(`work.${index}.location`)}
                   />
@@ -307,7 +308,7 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     name={`work.${index}.highlights`}
                     label="What you did"
-                    hint="One per line. Lead with the outcome and put a number on it."
+                    placeholder={'Cut retrieval latency from 240ms to 45ms.\nLed a team of four.'}
                   />
                 </EntryCard>
               ))}
@@ -318,13 +319,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'projects':
         return (
-          <FormSection title={formBlockTitle(id)} count={projects.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={projects.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {projects.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={projects.fields.length}
+                  blockId={`projects.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -354,8 +360,7 @@ export const ProfileForm = memo(function ProfileForm({
                       />
                       <Field
                         label="Ended"
-                        hint="Leave empty if you are still working on it."
-                        placeholder="2024-06"
+                        placeholder="Still going"
                         error={errors.projects?.[index]?.endDate?.message}
                         {...register(`projects.${index}.endDate`)}
                       />
@@ -366,7 +371,6 @@ export const ProfileForm = memo(function ProfileForm({
                       form={form}
                       name={`projects.${index}.keywords`}
                       label="Built with"
-                      hint="Separated by commas."
                       placeholder="Python, Pandas, SQL"
                     />
                   </WhenSet>
@@ -382,7 +386,9 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     name={`projects.${index}.highlights`}
                     label="What you did and what came of it"
-                    hint="One per line. Lead with the outcome and put a number on it."
+                    placeholder={
+                      'Shipped the ranking model behind the search box.\nCut build times by half.'
+                    }
                   />
                 </EntryCard>
               ))}
@@ -393,13 +399,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'education':
         return (
-          <FormSection title={formBlockTitle(id)} count={education.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={education.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {education.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={education.fields.length}
+                  blockId={`education.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -451,7 +462,7 @@ export const ProfileForm = memo(function ProfileForm({
                       form={form}
                       name={`education.${index}.courses`}
                       label="Details"
-                      hint="One per line. GPA, honours, coursework worth naming."
+                      placeholder={'First-class honours\nDistributed Systems, Compilers'}
                     />
                   </WhenSet>
                 </EntryCard>
@@ -463,13 +474,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'skills':
         return (
-          <FormSection title={formBlockTitle(id)} count={skills.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={skills.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {skills.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={skills.fields.length}
+                  blockId={`skills.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -489,7 +505,6 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     name={`skills.${index}.keywords`}
                     label="Skills"
-                    hint="Separated by commas. Only list what you could be asked about."
                     placeholder="PyTorch, scikit-learn"
                   />
                 </EntryCard>
@@ -501,13 +516,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'languages':
         return (
-          <FormSection title={formBlockTitle(id)} count={languages.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={languages.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {languages.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={languages.fields.length}
+                  blockId={`languages.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -539,13 +559,18 @@ export const ProfileForm = memo(function ProfileForm({
 
       case 'certificates':
         return (
-          <FormSection title={formBlockTitle(id)} count={certificates.fields.length}>
+          <FormSection
+            blockId={`section:${id}`}
+            title={formBlockTitle(id)}
+            count={certificates.fields.length}
+          >
             <ul className="flex flex-col gap-3">
               {certificates.fields.map((item, index) => (
                 <EntryCard
                   key={item.id}
                   index={index}
                   total={certificates.fields.length}
+                  blockId={`certificates.${index}`}
                   title={
                     <EntryTitle
                       form={form}
@@ -581,7 +606,6 @@ export const ProfileForm = memo(function ProfileForm({
         <Field label="Full name" {...register('basics.name')} placeholder="James Smith" />
         <Field
           label="Headline"
-          hint="Sits under your name. Leave it empty if you would rather not have one."
           placeholder="Data Analyst | SQL | Python"
           {...register('basics.label')}
         />
@@ -613,7 +637,7 @@ export const ProfileForm = memo(function ProfileForm({
         {has('summary') && (
           <TextArea
             label="Summary"
-            hint="Two or three sentences. What you do, and the evidence for it."
+            placeholder={'Two or three sentences. What you do, and the evidence for it.'}
             {...register('basics.summary')}
           />
         )}

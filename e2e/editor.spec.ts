@@ -823,3 +823,227 @@ test.describe('import and export', () => {
     )
   })
 })
+
+/**
+ * A resume form runs to five or six screens with a normal career, and the
+ * preview used to sit at the top of page one however far down you scrolled. The
+ * one thing a live preview is for is showing you what you are changing.
+ */
+test.describe('the preview follows the form', () => {
+  const previewScroller = 'section[aria-label="Preview"] div.overflow-y-auto'
+  const formScroller = 'section[aria-label="Resume content"] > div.absolute'
+
+  /** Enough of a career that the form is longer than the window. */
+  async function fillSeveralRoles(page: import('@playwright/test').Page) {
+    await page.goto('/editor')
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+    for (let i = 0; i < 6; i += 1) {
+      if (i > 0) await page.getByRole('button', { name: 'Add a role' }).click()
+      await page.getByLabel('Role').nth(i).fill(`Role ${i}`)
+      await page.getByLabel('Employer').nth(i).fill(`Company ${i}`)
+    }
+    await expect(page.locator(status)).toContainText('compiled in', { timeout: 15_000 })
+  }
+
+  test('scrolling to a later entry brings it into view on the page', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'The two panes are never on screen together.')
+    await fillSeveralRoles(page)
+
+    const preview = page.locator(previewScroller)
+    expect(await preview.evaluate((element) => element.scrollTop)).toBe(0)
+
+    await page.locator(formScroller).evaluate((element) => element.scrollTo({ top: 2600 }))
+
+    await expect
+      .poll(() => preview.evaluate((element) => element.scrollTop), { timeout: 5_000 })
+      .toBeGreaterThan(0)
+  })
+
+  test('the form carries the same block ids the compiler reports', async ({ page }) => {
+    await fillSeveralRoles(page)
+
+    // The join between the two halves. If either side renames a block, the
+    // preview silently stops following rather than failing.
+    const marks = await page
+      .locator('[data-block]')
+      .evaluateAll((all) => all.map((element) => (element as HTMLElement).dataset.block))
+    expect(marks).toContain('section:work')
+    expect(marks).toContain('work.0')
+    expect(marks).toContain('work.5')
+  })
+
+  /**
+   * Found by this change breaking two existing tests. A block is dragged from
+   * where it sits on the page, so a page that scrolls out from under the
+   * pointer moves the target mid-drag and the block lands somewhere nobody
+   * aimed at.
+   */
+  test('the page holds still while blocks are being rearranged', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await fillSeveralRoles(page)
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    await expect(page.locator('[aria-label="Move work.1"]').first()).toBeVisible({
+      timeout: 15_000,
+    })
+
+    const preview = page.locator(previewScroller)
+    const before = await preview.evaluate((element) => element.scrollTop)
+    await page.locator(formScroller).evaluate((element) => element.scrollTo({ top: 2600 }))
+    await page.waitForTimeout(1_000)
+
+    expect(await preview.evaluate((element) => element.scrollTop)).toBe(before)
+  })
+})
+
+/**
+ * A select, a range and a checkbox arrive with the operating system's own
+ * chrome, and the settings pane was the one screen in the app still wearing it.
+ */
+test.describe('the settings controls are drawn by the app', () => {
+  test('none of the three are left as the browser draws them', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'Layout' }).click()
+
+    const appearances = await page.evaluate(() =>
+      ['select', 'input[type=range]', 'input[type=checkbox]'].map((selector) => {
+        const element = document.querySelector(selector)
+        return element ? getComputedStyle(element).appearance : 'missing'
+      }),
+    )
+    expect(appearances).toEqual(['none', 'none', 'none'])
+  })
+
+  test('the slider track fills to where the handle is', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'Layout' }).click()
+
+    // A track cannot know where its thumb is, so the share is handed to CSS.
+    // Without it the control says nothing until you look at the handle.
+    const fill = () =>
+      page
+        .locator('input[type=range]')
+        .first()
+        .evaluate((element) => (element as HTMLElement).style.getPropertyValue('--fill'))
+
+    const before = await fill()
+    expect(before).toMatch(/%$/)
+
+    await page.locator('input[type=range]').first().press('ArrowRight')
+    await expect.poll(fill).not.toBe(before)
+  })
+})
+
+/**
+ * Moving a block from page one to the end of page two took two hands: the drag
+ * holds the pointer down, and a pointer that is down cannot also scroll, so the
+ * other hand had to turn the wheel.
+ */
+test.describe('a drag scrolls the page at its edges', () => {
+  const previewScroller = 'section[aria-label="Preview"] div.overflow-y-auto'
+
+  /** A career long enough to run onto a second page. */
+  async function twoPages(page: import('@playwright/test').Page) {
+    await page.goto('/editor')
+    await page.evaluate(() => {
+      const work = Array.from({ length: 14 }, (_, i) => ({
+        name: `Company ${i}`,
+        position: `Role ${i}`,
+        startDate: '2019-06',
+        endDate: '2023-01',
+        highlights: [
+          'Cut retrieval latency from 240ms to 45ms by rebuilding the index end to end.',
+          'Led a team of four through a migration that nobody wanted to own.',
+        ],
+      }))
+      localStorage.setItem(
+        'career-forge:draft:v1',
+        JSON.stringify({
+          profile: { basics: { name: 'Ana Ruiz' }, work },
+          document: {
+            id: 'a',
+            name: 'A',
+            options: { maxPages: 4 },
+            sections: [{ kind: 'standard', id: 'work', visible: true }],
+          },
+        }),
+      )
+    })
+    await page.reload()
+    await expect(page.locator('section[aria-label="Preview"] figure').nth(1)).toBeVisible({
+      timeout: 20_000,
+    })
+    await page.getByRole('button', { name: 'Rearrange' }).click()
+    await expect(page.locator('[aria-label="Move work.0"]').first()).toBeVisible({
+      timeout: 15_000,
+    })
+  }
+
+  test('holding a block at the bottom edge carries it to the end', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await twoPages(page)
+
+    const scroller = page.locator(previewScroller)
+    const pane = await scroller.boundingBox()
+    const block = await page.locator('[aria-label="Move work.0"]').first().boundingBox()
+    if (!pane || !block) throw new Error('The page did not render.')
+
+    await page.mouse.move(block.x + block.width / 2, block.y + block.height / 2)
+    await page.mouse.down()
+    // Into the strip and then still. No wheel, no further movement.
+    await page.mouse.move(pane.x + pane.width / 2, pane.y + pane.height - 30, { steps: 6 })
+
+    await expect
+      .poll(() => scroller.evaluate((element) => element.scrollTop), { timeout: 6_000 })
+      .toBeGreaterThan(300)
+
+    /**
+     * The target has to survive arriving. Below the last block sit a page
+     * number and the pane's padding, and a pane scrolling under a still pointer
+     * makes the browser fire pointerleave on the band that moved away — so the
+     * first version of this reached the end of the document with nothing
+     * selected and dropped nowhere.
+     */
+    await expect(page.locator('[data-band].bg-accent\\/10')).toHaveCount(1)
+    await page.mouse.up()
+
+    await expect(page.getByLabel('Role').first()).not.toHaveValue('Role 0')
+  })
+
+  test('the page holds still when the pointer is away from the edges', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await twoPages(page)
+
+    const scroller = page.locator(previewScroller)
+    const pane = await scroller.boundingBox()
+    const block = await page.locator('[aria-label="Move work.0"]').first().boundingBox()
+    if (!pane || !block) throw new Error('The page did not render.')
+
+    await page.mouse.move(block.x + block.width / 2, block.y + block.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 2, { steps: 6 })
+    await page.waitForTimeout(900)
+
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(0)
+    await page.mouse.up()
+  })
+
+  test('releasing between two pages still cancels the move', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile', 'Dragging needs the page and the form together.')
+    await twoPages(page)
+
+    const pane = await page.locator(previewScroller).boundingBox()
+    const block = await page.locator('[aria-label="Move work.1"]').first().boundingBox()
+    if (!pane || !block) throw new Error('The page did not render.')
+
+    await page.mouse.move(block.x + block.width / 2, block.y + block.height / 2)
+    await page.mouse.down()
+    // Off the page entirely, but not into either edge strip.
+    await page.mouse.move(pane.x + 8, pane.y + pane.height / 2, { steps: 8 })
+    await page.waitForTimeout(400)
+    await page.mouse.up()
+
+    await expect(page.getByLabel('Role').first()).toHaveValue('Role 0')
+  })
+})

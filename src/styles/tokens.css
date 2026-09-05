@@ -163,3 +163,142 @@
   --color-flag: var(--flag);
   --color-flag-sunk: var(--flag-sunk);
 }
+
+/*
+ * The three controls a browser draws itself.
+ *
+ * A select, a range and a checkbox arrive with the operating system's own
+ * chrome — rounded corners, a gradient, a system-blue tick — and the settings
+ * pane was the one screen in the app wearing it. Setting `accent-color` tints
+ * them without changing their shape, which is why they still read as borrowed.
+ *
+ * The native element is kept in every case. It carries the keyboard behaviour,
+ * the mobile pickers and the accessibility mapping, and none of that is worth
+ * reimplementing to change how a corner looks. Only the paint is replaced.
+ *
+ * Marks are drawn with `mask-image` rather than a coloured SVG so the colour
+ * comes from a token like everything else, instead of a hex buried in a URL.
+ */
+@layer components {
+  .control-select {
+    appearance: none;
+    padding-right: calc(var(--spacing) * 8);
+    background-image: none;
+  }
+
+  /* The chevron. Positioned rather than inlined so the select stays one box. */
+  .control-select-wrap {
+    position: relative;
+  }
+
+  .control-select-wrap::after {
+    content: '';
+    position: absolute;
+    right: calc(var(--spacing) * 3);
+    bottom: calc(var(--spacing) * 3.5);
+    width: 0.6rem;
+    height: 0.35rem;
+    background-color: var(--text-muted);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='square'/%3E%3C/svg%3E");
+    mask-repeat: no-repeat;
+    mask-size: contain;
+    pointer-events: none;
+  }
+
+  /*
+   * The slider reads as a ruler: a hairline track, filled to the left of the
+   * handle, and a square handle rather than a pill. `--fill` is set by the
+   * component from the value, because a track cannot know where its thumb is.
+   */
+  .control-range {
+    appearance: none;
+    width: 100%;
+    height: 1rem;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .control-range::-webkit-slider-runnable-track {
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(
+      to right,
+      var(--accent) 0 var(--fill, 0%),
+      var(--hairline) var(--fill, 0%) 100%
+    );
+  }
+
+  .control-range::-moz-range-track {
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(
+      to right,
+      var(--accent) 0 var(--fill, 0%),
+      var(--hairline) var(--fill, 0%) 100%
+    );
+  }
+
+  .control-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-top: -0.3125rem;
+    border-radius: var(--radius-edge);
+    background: var(--accent);
+  }
+
+  .control-range::-moz-range-thumb {
+    width: 0.75rem;
+    height: 0.75rem;
+    border: none;
+    border-radius: var(--radius-edge);
+    background: var(--accent);
+  }
+
+  .control-range:focus-visible {
+    outline: none;
+  }
+
+  .control-range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px var(--accent-sunk);
+  }
+
+  .control-range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px var(--accent-sunk);
+  }
+
+  /* A ticked box, drawn the way the rest of the app draws a box. */
+  .control-check {
+    appearance: none;
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-edge);
+    background-color: var(--field);
+    cursor: pointer;
+  }
+
+  .control-check:checked {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    mask-image: none;
+  }
+
+  .control-check:checked::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: var(--on-accent);
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='black' stroke-width='2' stroke-linecap='square'/%3E%3C/svg%3E");
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: 0.8rem;
+  }
+
+  .control-check:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-sunk);
+  }
+}
