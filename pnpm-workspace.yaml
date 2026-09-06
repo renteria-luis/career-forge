@@ -1,3 +1,6 @@
 allowBuilds:
+  # drizzle-kit runs the migration generator through esbuild, and esbuild's
+  # install step is what puts the platform binary where it can find it.
+  esbuild: true
   sharp: false
   unrs-resolver: false
