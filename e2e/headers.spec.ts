@@ -27,8 +27,41 @@ test.describe('security headers', () => {
       // Fonts are self-hosted by next/font at build time. If this ever needs a
       // remote origin, something started fetching from Google at runtime.
       expect(csp).toContain("font-src 'self'")
+
+      // The part that stops a stored-XSS bug in someone's resume text from
+      // becoming session theft. `'unsafe-inline'` here would let an injected
+      // tag run, and `'strict-dynamic'` is what makes the nonce mean anything —
+      // without it the browser still honours the host list beside it.
+      expect(csp).toMatch(/script-src [^;]*'nonce-[A-Za-z0-9+/=]+'/)
+      expect(csp).toContain("'strict-dynamic'")
+      expect(csp.split(';').find((part) => part.includes('script-src'))).not.toContain(
+        "'unsafe-inline'",
+      )
     })
   }
+
+  test('the nonce is different on every request', async ({ request }) => {
+    // A nonce that repeats is not one: an attacker who reads it once from a
+    // cached page could then write a script tag that carries it.
+    const nonce = async () =>
+      (await request.get('/')).headers()['content-security-policy']?.match(/'nonce-([^']+)'/)?.[1]
+
+    const first = await nonce()
+    expect(first).toBeTruthy()
+    expect(await nonce()).not.toBe(first)
+  })
+
+  test('the nonce in the header is the one on the scripts', async ({ request }) => {
+    // Two halves that have to agree. They are produced in different places —
+    // the proxy writes the header, Next reads it back while rendering — and
+    // nothing else would notice them drifting apart.
+    const response = await request.get('/')
+    const fromHeader = response.headers()['content-security-policy']?.match(/'nonce-([^']+)'/)?.[1]
+    const onScripts = [...(await response.text()).matchAll(/nonce="([^"]+)"/g)].map((m) => m[1])
+
+    expect(onScripts.length).toBeGreaterThan(0)
+    expect(new Set(onScripts)).toEqual(new Set([fromHeader]))
+  })
 
   test('the API routes get them too', async ({ request }) => {
     const headers = (await request.post('/api/compile', { data: {} })).headers()

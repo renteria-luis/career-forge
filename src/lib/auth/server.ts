@@ -1,11 +1,14 @@
 import { betterAuth } from 'better-auth'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 import { db } from '@/lib/db/client'
 import * as schema from '@/lib/db/schema'
+import { checkBreached } from './breached'
 import { sendEmail } from './email'
 import { hashPassword, verifyPassword } from './password'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './identity'
+import { CALLER_HEADER } from '@/lib/http/caller'
 
 /**
  * The account system, configured in one place.
@@ -37,20 +40,6 @@ const SESSION_COOKIE_CACHE_SECONDS = 300
 /** An hour, matching the library default, and stated here so it is a decision. */
 const VERIFICATION_EXPIRY_SECONDS = 60 * 60
 
-/**
- * The header `proxy.ts` writes with the caller's address.
- *
- * Not `x-forwarded-for`. Google's load balancer appends to whatever arrived and
- * does not verify what precedes it, so the leftmost entry of that header is
- * whatever the caller typed — the same finding that `src/lib/http/rate-limit.ts`
- * exists for. Left to read `x-forwarded-for` itself, this library refuses to
- * guess and falls back to one shared bucket for every visitor, which turns its
- * per-address login limit into a way to lock everyone out at once. `proxy.ts`
- * resolves the address once, with the rule the rest of the app already uses,
- * and writes it here as a single trusted value.
- */
-export const CALLER_HEADER = 'x-trusted-caller'
-
 function baseURL(): string | undefined {
   return process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL
 }
@@ -81,6 +70,42 @@ function resetEmail(url: string): { subject: string; text: string } {
     ].join('\n'),
   }
 }
+
+/** The paths where a password arrives and is about to become the stored one. */
+const PASSWORD_PATHS = new Set(['/sign-up/email', '/reset-password', '/change-password'])
+
+/**
+ * Refuses a password that already appears in a public breach corpus.
+ *
+ * A hook rather than a check at the route, because there are three paths that
+ * set a password and this has to cover all of them — including the two a person
+ * reaches months after registering, which is exactly where a separate check at
+ * the sign-up route would have quietly not applied.
+ *
+ * The message says what is wrong and nothing about the account. `checkBreached`
+ * fails open, so an outage here lets the password through rather than stopping
+ * anyone from registering.
+ */
+const refuseBreachedPasswords = createAuthMiddleware(async (ctx) => {
+  if (!PASSWORD_PATHS.has(ctx.path)) return
+
+  const body: unknown = ctx.body
+  const password =
+    body !== null && typeof body === 'object' && 'newPassword' in body
+      ? (body as { newPassword?: unknown }).newPassword
+      : body !== null && typeof body === 'object' && 'password' in body
+        ? (body as { password?: unknown }).password
+        : undefined
+  if (typeof password !== 'string') return
+
+  const { breached } = await checkBreached(password)
+  if (!breached) return
+
+  throw new APIError('BAD_REQUEST', {
+    message:
+      'That password appears in a public list of leaked passwords. Choose one you have not used elsewhere.',
+  })
+})
 
 function create() {
   return betterAuth({
@@ -180,6 +205,8 @@ function create() {
         '/send-verification-email': { window: 60, max: 5 },
       },
     },
+
+    hooks: { before: refuseBreachedPasswords },
 
     /** Writes the Set-Cookie headers a server action returns. Must come last. */
     plugins: [nextCookies()],

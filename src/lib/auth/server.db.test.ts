@@ -27,6 +27,19 @@ vi.mock('./email', () => ({
   },
 }))
 
+/**
+ * The breach corpus, stubbed. Its own tests cover the request; what matters
+ * here is that a refusal from it stops an account being created, and the suite
+ * must not reach the network to find out.
+ */
+const breached = new Set<string>()
+vi.mock('./breached', () => ({
+  checkBreached: async (password: string) => ({
+    breached: breached.has(password),
+    unavailable: false,
+  }),
+}))
+
 function lastLink(): string {
   const message = sent.at(-1)
   if (!message) throw new Error('no email was sent')
@@ -80,6 +93,22 @@ describe('registration', () => {
 
     expect(accounts[0]?.password).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/)
     expect(accounts[0]?.password).not.toContain(PASSWORD)
+  })
+
+  it('refuses a password that is in the breach corpus', async () => {
+    breached.add('a-leaked-password-x')
+
+    await expect(
+      auth().api.signUpEmail({
+        body: { name: 'Hopper', email: 'hopper@example.com', password: 'a-leaked-password-x' },
+      }),
+    ).rejects.toThrow()
+
+    const rows = await db()
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.email, 'hopper@example.com'))
+    expect(rows).toHaveLength(0)
   })
 
   it('answers a taken address the same way as a free one', async () => {
