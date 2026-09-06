@@ -117,6 +117,27 @@ viewer. An iframe reloads on every new document, which blanks the page on each
 keystroke; a canvas keeps the last good page on screen until the next has
 finished drawing.
 
+## Accounts sit beside the pipeline, not inside it
+
+```
+Postgres ─→ better-auth ─→ session
+   src/lib/db        src/lib/auth
+```
+
+Nothing above reads from here. A resume compiles the same whether or not
+anybody is signed in, and every page except the account ones works without an
+account. That is deliberate and it is what stage 2 is for: an account exists so
+that generated writing can be attributed and a stranger cannot spend the model
+budget anonymously, not to gate the product.
+
+The database is plain Postgres reached through `pg`, and the account tables are
+ordinary tables in it. A provider-managed identity service would put user
+records behind an API that has to be reimplemented to move; sessions in your own
+Postgres move with a `pg_dump`.
+
+Sessions are rows referenced by an opaque cookie, not tokens. That is what makes
+one revocable, and revoking one has to be possible.
+
 ## Deployment
 
 `output: 'standalone'` traces the server and its real dependencies, including

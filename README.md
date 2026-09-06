@@ -26,6 +26,10 @@ pnpm install
 pnpm dev         # http://localhost:3000
 ```
 
+Everything except the account pages works with no configuration at all. For
+those, copy `.env.example` to `.env.local` and fill it in — it says what each
+value is and where to get it.
+
 ## Scripts
 
 | Command          | What it does                           |
@@ -37,7 +41,16 @@ pnpm dev         # http://localhost:3000
 | `pnpm lint`      | Lint                                   |
 | `pnpm format`    | Format with Prettier                   |
 | `pnpm test`      | Unit tests                             |
+| `pnpm test:db`   | Tests against a real Postgres          |
 | `pnpm test:e2e`  | End-to-end tests on a production build |
+
+`pnpm test:db` and `pnpm test:e2e` start their own Postgres and need nothing
+installed: PGlite is the Postgres source compiled to WebAssembly, put behind a
+TCP socket so the driver and the migrations run exactly as they do against the
+deployed database.
+
+Migrations are files in `drizzle/`. `pnpm db:generate` writes one from a change
+to the schema; `pnpm db:migrate` applies them to whatever `DATABASE_URL` names.
 
 ## Container
 
