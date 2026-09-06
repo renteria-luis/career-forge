@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { APIError, createAuthMiddleware } from 'better-auth/api'
+import { APIError } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 import { db } from '@/lib/db/client'
@@ -44,6 +44,20 @@ function baseURL(): string | undefined {
   return process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL
 }
 
+/**
+ * Points a link at the page that reports what happened.
+ *
+ * The library builds its own link to the endpoint and carries where to go
+ * afterwards in `callbackURL`, which defaults to the site root — so following a
+ * verification link landed on the home page with no word about whether it had
+ * worked. This only changes the destination.
+ */
+function landOn(url: string, path: string): string {
+  const link = new URL(url)
+  link.searchParams.set('callbackURL', path)
+  return link.toString()
+}
+
 function verificationEmail(url: string): { subject: string; text: string } {
   return {
     subject: 'Confirm your Career Forge address',
@@ -71,41 +85,31 @@ function resetEmail(url: string): { subject: string; text: string } {
   }
 }
 
-/** The paths where a password arrives and is about to become the stored one. */
-const PASSWORD_PATHS = new Set(['/sign-up/email', '/reset-password', '/change-password'])
-
 /**
- * Refuses a password that already appears in a public breach corpus.
+ * Hashing, with a breached password refused first.
  *
- * A hook rather than a check at the route, because there are three paths that
- * set a password and this has to cover all of them — including the two a person
- * reaches months after registering, which is exactly where a separate check at
- * the sign-up route would have quietly not applied.
+ * The check sits inside hashing rather than in front of the sign-up route, and
+ * that is the whole point: every path that sets a password has to hash it, so
+ * there is no route to add later that quietly skips this. A list of paths to
+ * guard would have needed remembering, and password reset — reached months
+ * after registering, when a person is most likely to reuse something old — is
+ * exactly the one that would have been left off.
  *
- * The message says what is wrong and nothing about the account. `checkBreached`
- * fails open, so an outage here lets the password through rather than stopping
- * anyone from registering.
+ * The library ships a plugin for this and it is not used, for one reason: it
+ * fails closed. A failed request to the corpus becomes a 500, so an outage at a
+ * third party would stop anyone registering or resetting a password. See
+ * `checkBreached`, which fails open and says which it did.
  */
-const refuseBreachedPasswords = createAuthMiddleware(async (ctx) => {
-  if (!PASSWORD_PATHS.has(ctx.path)) return
-
-  const body: unknown = ctx.body
-  const password =
-    body !== null && typeof body === 'object' && 'newPassword' in body
-      ? (body as { newPassword?: unknown }).newPassword
-      : body !== null && typeof body === 'object' && 'password' in body
-        ? (body as { password?: unknown }).password
-        : undefined
-  if (typeof password !== 'string') return
-
+async function hashUnlessBreached(password: string): Promise<string> {
   const { breached } = await checkBreached(password)
-  if (!breached) return
-
-  throw new APIError('BAD_REQUEST', {
-    message:
-      'That password appears in a public list of leaked passwords. Choose one you have not used elsewhere.',
-  })
-})
+  if (breached) {
+    throw new APIError('BAD_REQUEST', {
+      message:
+        'That password appears in a public list of leaked passwords. Choose one you have not used elsewhere.',
+    })
+  }
+  return hashPassword(password)
+}
 
 function create() {
   return betterAuth({
@@ -130,7 +134,7 @@ function create() {
        * cheaper, so there is nothing being traded away.
        */
       password: {
-        hash: hashPassword,
+        hash: hashUnlessBreached,
         verify: ({ hash, password }) => verifyPassword(hash, password),
       },
       sendResetPassword: async ({ user, url }) => {
@@ -150,7 +154,7 @@ function create() {
       autoSignInAfterVerification: false,
       expiresIn: VERIFICATION_EXPIRY_SECONDS,
       sendVerificationEmail: async ({ user, url }) => {
-        await sendEmail({ to: user.email, ...verificationEmail(url) })
+        await sendEmail({ to: user.email, ...verificationEmail(landOn(url, '/verify-email')) })
       },
     },
 
@@ -200,13 +204,16 @@ function create() {
         // 19 MiB Argon2id verify.
         '/sign-in/email': { window: 60, max: 10 },
         '/sign-up/email': { window: 60, max: 5 },
-        '/forget-password': { window: 60, max: 5 },
+        // `/request-password-reset`, not `/forget-password`. The paths were
+        // read out of the installed version: the older name is gone here, and
+        // a rule on a path that does not exist is a limit that silently never
+        // applies.
+        '/request-password-reset': { window: 60, max: 5 },
         '/reset-password': { window: 60, max: 5 },
+        '/reset-password/*': { window: 60, max: 10 },
         '/send-verification-email': { window: 60, max: 5 },
       },
     },
-
-    hooks: { before: refuseBreachedPasswords },
 
     /** Writes the Set-Cookie headers a server action returns. Must come last. */
     plugins: [nextCookies()],

@@ -31,6 +31,11 @@ jobs:
       # Unit tests cover the schema, the render model and PDF compilation,
       # including that every font in the registry has a real file behind it.
       - run: pnpm test
+      # Separate because it starts a Postgres, and the suite above promises to
+      # finish in under a second so that nobody skips it. This one answers the
+      # questions no unit test can: whether the migration applies, and whether
+      # the account library's SQL runs against the schema in the repository.
+      - run: pnpm test:db
 
   e2e:
     name: End-to-end

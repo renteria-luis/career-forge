@@ -96,6 +96,9 @@ describe('registration', () => {
   })
 
   it('refuses a password that is in the breach corpus', async () => {
+    // The check lives inside hashing rather than in front of one route, so
+    // every path that sets a password is covered whether or not anyone
+    // remembered to list it.
     breached.add('a-leaked-password-x')
 
     await expect(

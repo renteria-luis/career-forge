@@ -58,11 +58,28 @@ function freePort(): Promise<number> {
  * the deployment runs, and a durable data directory is what makes a failure
  * reproducible while it is being looked at.
  */
-export async function startTestDatabase(): Promise<TestDatabase> {
+export async function startTestDatabase(options: { port?: number } = {}): Promise<TestDatabase> {
   const dataDir = await mkdtemp(join(tmpdir(), 'career-forge-pg-'))
   const pglite = await PGlite.create({ dataDir })
-  const port = await freePort()
-  const server = new PGLiteSocketServer({ db: pglite, port, host: '127.0.0.1' })
+  // A caller supplies a port when something outside this process has to be told
+  // the address in advance; see `e2e/environment.ts`.
+  const port = options.port ?? (await freePort())
+  /**
+   * `maxConnections` defaults to one, and one is not enough.
+   *
+   * The application's pool opens up to five, and the end-to-end suite runs two
+   * browser projects against a single server. Left at the default the second
+   * connection is refused, which surfaces as a sign-up form that says "that did
+   * not work" for no visible reason — which is how this was found. Queries
+   * still run one at a time inside PGlite; this is about how many callers may
+   * be attached, not how much runs at once.
+   */
+  const server = new PGLiteSocketServer({
+    db: pglite,
+    port,
+    host: '127.0.0.1',
+    maxConnections: 20,
+  })
   await server.start()
 
   // `sslmode=disable` is what tells the pool this is a socket on this machine.

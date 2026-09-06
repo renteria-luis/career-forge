@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 /**
  * Sending the two transactional emails this app has.
  *
@@ -39,10 +41,36 @@ export async function sendEmail({ to, subject, text }: Message): Promise<void> {
   const from = process.env.EMAIL_FROM
 
   if (!key || !from) {
-    // Without a provider configured there is no delivery, and pretending
-    // otherwise would leave the flow looking like it worked. In development
-    // the link goes to the terminal instead, which is what makes the flow
-    // testable without an account; the address still never appears.
+    /**
+     * A local mailbox, when one is asked for by name.
+     *
+     * Running a production build against a real database without an email
+     * provider is an ordinary thing to want — it is how the verification flow
+     * is exercised end to end — and the alternative is either sending real mail
+     * from a test or pretending the message went out. Off unless the directory
+     * is named, so a deployment that simply forgot its key still fails loudly.
+     *
+     * The recipient is written into the message, and that is not the exception
+     * to §6 it looks like. That rule is about logs and stored records — things
+     * kept and read for other reasons, where an address is a leak. This is the
+     * mail itself, in a directory somebody named on purpose so they could read
+     * what was sent and to whom. A mailbox that will not say who a message was
+     * for cannot answer the only question it exists to answer.
+     */
+    const sink = process.env.EMAIL_SINK_DIR
+    if (sink) {
+      const { writeFile, mkdir } = await import('node:fs/promises')
+      await mkdir(sink, { recursive: true })
+      await writeFile(
+        `${sink}/${Date.now()}-${randomUUID()}.txt`,
+        `To: ${to}\nSubject: ${subject}\n\n${text}\n`,
+      )
+      return
+    }
+
+    // Without a provider there is no delivery, and pretending otherwise would
+    // leave the flow looking like it worked. In development the link goes to
+    // the terminal instead; the address still never appears.
     if (process.env.NODE_ENV === 'development') {
       console.info(`[dev email] ${subject}\n${text}`)
       return
