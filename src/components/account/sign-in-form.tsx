@@ -76,6 +76,18 @@ export function SignInForm() {
 
       <FormError message={failure} />
 
+      {/* Only once they have been refused. This is where somebody whose
+          confirmation email never arrived actually ends up, and until now the
+          message told them to follow a link they never received. */}
+      {failure && (
+        <p className="text-muted text-small">
+          Never got the confirmation email?{' '}
+          <Link href="/resend-verification" className="text-accent border-b border-current pb-0.5">
+            Send it again
+          </Link>
+        </p>
+      )}
+
       <div className="flex items-center gap-4">
         <Button type="submit" variant="primary" disabled={isSubmitting}>
           {isSubmitting ? 'Signing in…' : 'Sign in'}

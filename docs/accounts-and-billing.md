@@ -151,6 +151,21 @@ address exists. Otherwise the login form is a membership oracle.
 **Email verification.** Required before AI generation is reachable. Unverified
 accounts may exist; they may not spend.
 
+There has to be a way to ask for the link again, and it is not a nicety. The
+library sends the first one with a `catch` around it: a delivery that failed
+outright still answers the registration with success, so the person is shown
+"check your inbox" and waits for something that was never sent. It does not
+take a bug either — the message goes to spam, or the hour runs out.
+`/resend-verification` is that way out, and it is offered on the sign-in
+refusal, which is where somebody in that state actually ends up.
+
+That page answers the same way for an address with no account, one already
+confirmed, and one that was just sent a link. A delivery failure is folded in
+with them, which is a trade rather than an oversight: reporting it would help
+the person in front of the form, and it would also be a signal, because that
+failure can only happen for an address that exists and is unconfirmed. It is
+logged on the server instead, where whoever can fix it will see it.
+
 **Breached passwords.** Reject passwords found in the Have I Been Pwned range
 API, which is queried by hash prefix and never sees the password. Cheap, and
 it removes the most common failure by a wide margin.

@@ -55,23 +55,30 @@ const formError = 'p[role="alert"]'
 const PASSWORD = 'a-long-enough-password'
 
 /**
- * The link from the newest message sent to one address.
+ * Every message sent to one address, newest first.
  *
  * Addressed rather than "the most recent file". The two browser projects share
  * one server and one mailbox, so reading the latest message meant one project
  * following the other's verification link and confirming somebody else's
  * account — which is how this was found.
  */
-async function linkSentTo(email: string): Promise<string> {
+async function messagesSentTo(email: string): Promise<string[]> {
   const files = (await readdir(E2E_MAIL_DIR)).sort().reverse()
+  const bodies: string[] = []
   for (const file of files) {
     const body = await readFile(`${E2E_MAIL_DIR}/${file}`, 'utf8')
-    if (!body.startsWith(`To: ${email}\n`)) continue
-    const link = body.match(/https?:\/\/\S+/)?.[0]
-    if (!link) throw new Error('the message carried no link')
-    return link
+    if (body.startsWith(`To: ${email}\n`)) bodies.push(body)
   }
-  throw new Error(`no message was sent to ${email}`)
+  return bodies
+}
+
+/** The link in the newest message sent to one address. */
+async function linkSentTo(email: string): Promise<string> {
+  const [newest] = await messagesSentTo(email)
+  if (!newest) throw new Error(`no message was sent to ${email}`)
+  const link = newest.match(/https?:\/\/\S+/)?.[0]
+  if (!link) throw new Error('the message carried no link')
+  return link
 }
 
 test.describe('accounts', () => {
@@ -116,6 +123,65 @@ test.describe('accounts', () => {
     await expect(page).toHaveURL(/\/sign-in$/)
   })
 
+  test('a link that never arrived can be asked for again', async ({ page }) => {
+    const email = address('lost')
+
+    await page.goto('/sign-up')
+    await page.getByLabel('Name').fill('Lost Link')
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill(PASSWORD)
+    await page.getByRole('button', { name: 'Create account' }).click()
+    await expect(page.getByText('Check your inbox.')).toBeVisible()
+
+    expect(await messagesSentTo(email)).toHaveLength(1)
+
+    // The route somebody actually takes: they try to sign in, get refused, and
+    // the way out is offered there rather than left to be guessed.
+    await page.goto('/sign-in')
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill(PASSWORD)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await page.getByRole('link', { name: 'Send it again' }).click()
+    await expect(page).toHaveURL(/\/resend-verification$/)
+
+    await page.getByLabel('Email').fill(email)
+    await page.getByRole('button', { name: 'Send a new link' }).click()
+    await expect(page.getByText('Check your inbox.')).toBeVisible()
+
+    /**
+     * A second message, not a second token.
+     *
+     * The two links can be byte-identical, and asserting otherwise is how this
+     * test first failed: the token is a JWT carrying the address and a
+     * timestamp in seconds, so a link asked for within the same second as the
+     * first is the same string. Nothing depends on it changing. What somebody
+     * depends on is that another message arrives and that following it works.
+     */
+    expect(await messagesSentTo(email)).toHaveLength(2)
+
+    await page.goto(await linkSentTo(email))
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Address confirmed')
+
+    await page.goto('/sign-in')
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill(PASSWORD)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page).toHaveURL(/\/editor$/)
+  })
+
+  test('asking for a new link says the same thing for any address', async ({ page }) => {
+    // Three outcomes made to look alike: no such account, one already
+    // confirmed, and a link actually sent. Otherwise the form is a way to ask
+    // who has an account here and who has not confirmed it.
+    for (const email of ['nobody-here@example.com', address('never-registered')]) {
+      await page.goto('/resend-verification')
+      await page.getByLabel('Email').fill(email)
+      await page.getByRole('button', { name: 'Send a new link' }).click()
+      await expect(page.getByText('Check your inbox.')).toBeVisible()
+      await expect(page.locator(formError)).toHaveCount(0)
+    }
+  })
+
   test('a taken address answers exactly like a free one', async ({ page }) => {
     // The rule from docs/accounts-and-billing.md: registration must not be a
     // way to ask who has an account here.
@@ -153,7 +219,13 @@ test.describe('accounts', () => {
   })
 
   test('the account pages are not offered to search engines', async ({ request }) => {
-    for (const path of ['/sign-in', '/sign-up', '/account', '/reset-password']) {
+    for (const path of [
+      '/sign-in',
+      '/sign-up',
+      '/account',
+      '/reset-password',
+      '/resend-verification',
+    ]) {
       const response = await request.get(path)
       expect(await response.text()).toContain('noindex')
     }

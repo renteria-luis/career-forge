@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -35,10 +36,20 @@ export function SignUpForm() {
 
   if (sent) {
     return (
-      <CheckYourInbox>
-        If that address is not already registered, a confirmation link is on its way. It is good for
-        an hour.
-      </CheckYourInbox>
+      <div className="flex flex-col gap-4">
+        <CheckYourInbox>
+          If that address is not already registered, a confirmation link is on its way. It is good
+          for an hour.
+        </CheckYourInbox>
+        {/* The first thing somebody wants when it does not arrive, offered
+            before they have to go looking for it. */}
+        <p className="text-muted text-small">
+          Nothing there?{' '}
+          <Link href="/resend-verification" className="text-accent border-b border-current pb-0.5">
+            Send it again
+          </Link>
+        </p>
+      </div>
     )
   }
 
