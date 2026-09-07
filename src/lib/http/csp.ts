@@ -52,8 +52,15 @@ export function contentSecurityPolicy(nonce: string, development: boolean): stri
      * attributes React writes for the preview's page geometry, and a nonce
      * cannot cover an attribute — there is nowhere to put it. Splitting them
      * keeps `'unsafe-inline'` on the narrow half instead of both.
+     *
+     * Development needs the wider one anyway. The dev server injects its own
+     * `<style>` elements for hot reloading and does not put the nonce on them,
+     * so a strict policy fills the console with refusals that describe the
+     * bundler rather than the app — measured at 33 on one page load, which is
+     * enough noise to hide a real one. The build that ships emits a stylesheet
+     * and needs none of it.
      */
-    `style-src 'self' 'nonce-${nonce}'`,
+    development ? "style-src 'self' 'unsafe-inline'" : `style-src 'self' 'nonce-${nonce}'`,
     "style-src-attr 'unsafe-inline'",
 
     // The preview canvas and the object URL a download is handed through.
