@@ -49,16 +49,19 @@ export function AccountShell({
         Career Forge
       </Link>
 
-      <div className="mt-6 flex items-start gap-3">
+      <div className="mt-6 flex items-start gap-2">
         {/* Beside the title rather than above it, because that is where a
             person looks for it, and it is a link rather than history.back():
             these pages are also arrived at from a mailbox, where there is no
-            previous page in this tab to go back to. */}
+            previous page in this tab to go back to.
+
+            The arrow alone, with no box around it. The box is still there as a
+            target — it is the padding a thumb needs — it is just not drawn. */}
         {back && (
           <Link
             href={back.href}
             aria-label={back.label}
-            className="border-hairline text-muted hover:border-accent hover:text-accent rounded-edge mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center border transition-colors"
+            className="text-muted hover:text-accent mt-0.5 -ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center transition-colors"
           >
             <span className="back-arrow" aria-hidden="true" />
           </Link>
@@ -98,7 +101,7 @@ export function AccountShell({
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') setAsking(false)
                 }}
-                className="border-hairline text-muted hover:border-accent hover:text-accent ml-2 inline-flex h-5 w-5 -translate-y-1 items-center justify-center rounded-full border align-middle text-[0.7rem] leading-none font-medium transition-colors focus-visible:rounded-full"
+                className="border-hairline text-muted hover:border-accent hover:text-accent ml-2 inline-flex h-4 w-4 -translate-y-1.5 items-center justify-center rounded-full border align-middle text-[0.55rem] leading-none font-medium transition-colors focus-visible:rounded-full"
               >
                 ?
               </button>
