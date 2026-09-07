@@ -116,6 +116,23 @@ A stored hash carries its own parameters, so `needsRehash` can compare them
 against current policy and a successful login is the one moment the plaintext
 is in hand to upgrade. Never bcrypt for new code; never a bare hash.
 
+**Password rules.** Twelve characters, a digit and a symbol, in
+`PASSWORD_RULES` — one list, read by the marks under the field, by the check
+before hashing, and by the wording of the refusal.
+
+The last two are composition rules and current guidance is against them. NIST
+SP 800-63B says verifiers "SHALL NOT impose other composition rules (e.g.,
+requiring mixtures of different character types)", because the measured
+response to being asked for a digit is to append a 1 — effort for the person,
+nothing for an attacker. That was put to the owner with the reasoning and asked
+for anyway; it is recorded here as a decision rather than left looking like an
+oversight. A space counts as a symbol, so a passphrase is not refused for being
+made of words.
+
+Length stayed at twelve. Eight was considered and is below both references that
+apply: OWASP asks twelve, and NIST asks fifteen for a password used without a
+second factor, reserving eight for one that has one.
+
 **Sessions.** Server-side sessions in Postgres, referenced by an opaque cookie.
 `HttpOnly`, `Secure`, `SameSite=Lax`. The session id is regenerated on login and
 on any privilege change. Not JWTs in local storage — a token readable by

@@ -64,7 +64,8 @@ afterAll(async () => {
   await database?.stop()
 })
 
-const PASSWORD = 'a-long-enough-password'
+/** Fifteen characters, a digit, and hyphens for symbols. See `PASSWORD_RULES`. */
+const PASSWORD = 'a-long-enough-1'
 
 describe('registration', () => {
   it('creates an account and sends a verification link', async () => {
@@ -99,11 +100,11 @@ describe('registration', () => {
     // The check lives inside hashing rather than in front of one route, so
     // every path that sets a password is covered whether or not anyone
     // remembered to list it.
-    breached.add('a-leaked-password-x')
+    breached.add('a-leaked-password-1')
 
     await expect(
       auth().api.signUpEmail({
-        body: { name: 'Hopper', email: 'hopper@example.com', password: 'a-leaked-password-x' },
+        body: { name: 'Hopper', email: 'hopper@example.com', password: 'a-leaked-password-1' },
       }),
     ).rejects.toThrow()
 
@@ -142,6 +143,22 @@ describe('registration', () => {
         body: { name: 'Shouting Ada', email: 'ADA@Example.com', password: PASSWORD },
       }),
     ).rejects.toThrow(/already an account/)
+  })
+
+  it('refuses a password that falls short, and names every rule it missed', async () => {
+    // The check lives inside hashing, so it covers every path that sets a
+    // password rather than the one route somebody remembered to guard.
+    await expect(
+      auth().api.signUpEmail({
+        body: { name: 'Weak', email: 'weak@example.com', password: 'abcdefghijklm' },
+      }),
+    ).rejects.toThrow(/a number, a symbol/)
+
+    const rows = await db()
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.email, 'weak@example.com'))
+    expect(rows).toHaveLength(0)
   })
 
   it('registers an address nobody has', async () => {

@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { useForm, useWatch } from 'react-hook-form'
 import { Button, Field } from '@/components/editor/fields'
 import { authClient } from '@/lib/auth/client'
-import { EMAIL_IN_USE } from '@/lib/auth/codes'
-import { MIN_PASSWORD_LENGTH } from '@/lib/auth/identity'
-import { CheckYourInbox, FormError, Requirement, Requirements } from './shell'
+import { EMAIL_IN_USE, INVALID_EMAIL } from '@/lib/auth/codes'
+import { CheckYourInbox, FormError } from './shell'
+import { PasswordFields, passwordAccepted } from './password-fields'
 
 /**
  * Registering.
@@ -16,8 +16,7 @@ import { CheckYourInbox, FormError, Requirement, Requirements } from './shell'
  * has no live checking of any kind — an address is either taken or it is not,
  * and that is a question only the server can answer, once, when the button is
  * pressed. The password rules are the exception, and they run the other way
- * round: they are on screen from the start as something to type towards,
- * rather than a scolding after a failed attempt.
+ * round: on screen from the start as something to type towards.
  */
 
 interface Values {
@@ -40,8 +39,6 @@ export function SignUpForm() {
   // `useWatch` rather than the form's own `watch`, which cannot be memoized and
   // so re-renders this component on every field in the form, not just these two.
   const [password, confirm] = useWatch({ control, name: ['password', 'confirm'] })
-  const longEnough = password.length >= MIN_PASSWORD_LENGTH
-  const matches = password.length > 0 && password === confirm
 
   if (sent) {
     return (
@@ -73,8 +70,8 @@ export function SignUpForm() {
           return
         }
 
-        // Taken addresses get their own answer, with the way out attached.
-        // What that gives up is written down in `identifyTheFailure`.
+        // A taken address gets its own answer, with the way out attached. What
+        // that gives up is written down in `identifyTheFailure`.
         if (error.code === EMAIL_IN_USE) {
           setFailure(
             <>
@@ -85,6 +82,10 @@ export function SignUpForm() {
               .
             </>,
           )
+          return
+        }
+        if (error.code === INVALID_EMAIL) {
+          setFailure('That does not look like an email address.')
           return
         }
         setFailure(error.message ?? 'That did not work. Try again.')
@@ -100,38 +101,22 @@ export function SignUpForm() {
       {/* No rule, no message, no check button. See the note above. */}
       <Field label="Email" type="email" autoComplete="email" {...register('email')} />
 
-      <div className="flex flex-col gap-2.5">
-        <Field
-          label="Password"
-          type="password"
-          autoComplete="new-password"
-          {...register('password')}
-        />
-        <Requirements>
-          <Requirement met={longEnough}>At least {MIN_PASSWORD_LENGTH} characters</Requirement>
-        </Requirements>
-      </div>
-
-      <div className="flex flex-col gap-2.5">
-        <Field
-          label="Repeat password"
-          type="password"
-          autoComplete="new-password"
-          {...register('confirm')}
-        />
-        <Requirements>
-          <Requirement met={matches}>Both passwords match</Requirement>
-        </Requirements>
-      </div>
+      <PasswordFields
+        label="Password"
+        password={password}
+        confirm={confirm}
+        fields={register('password')}
+        confirmFields={register('confirm')}
+      />
 
       <FormError message={failure} />
 
-      {/* Held shut until the rules above are green. They are the explanation,
-          which is why they are on screen before the button is ever pressed. */}
+      {/* Held shut until the marks above are filled in. They are the
+          explanation, which is why they are on screen before it is pressed. */}
       <Button
         type="submit"
         variant="primary"
-        disabled={isSubmitting || !longEnough || !matches}
+        disabled={isSubmitting || !passwordAccepted(password, confirm)}
         className="self-start"
       >
         {isSubmitting ? 'Creating…' : 'Create account'}

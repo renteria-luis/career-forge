@@ -13,7 +13,7 @@ export default async function ResetPasswordPage({ searchParams }: PageProps<'/re
   return (
     <AccountShell
       title="Choose a new password"
-      lead="Every session opened with the old password ends when you save this."
+      aside="Every session opened with the old password ends when you save this, on every device."
     >
       <ResetPasswordForm token={typeof token === 'string' ? token : null} />
     </AccountShell>

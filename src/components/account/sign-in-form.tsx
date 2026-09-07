@@ -6,7 +6,12 @@ import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { Button, Field } from '@/components/editor/fields'
 import { authClient } from '@/lib/auth/client'
-import { ACCOUNT_NOT_FOUND } from '@/lib/auth/codes'
+import {
+  ACCOUNT_NOT_FOUND,
+  EMAIL_NOT_VERIFIED,
+  INVALID_EMAIL,
+  INVALID_EMAIL_OR_PASSWORD,
+} from '@/lib/auth/codes'
 import { FormError } from './shell'
 
 /**
@@ -26,7 +31,18 @@ interface Values {
   password: string
 }
 
-function refusal(code: string | undefined): ReactNode {
+/**
+ * What to say, decided by what the server actually said.
+ *
+ * Every unknown outcome used to fall through to "that password is not right",
+ * which meant a malformed address, a refused burst of attempts and a server
+ * error all told somebody their password was wrong. Typing anything at all in
+ * the email box produced it. Only `INVALID_EMAIL_OR_PASSWORD` means that now,
+ * and anything unrecognised says so rather than inventing a cause.
+ */
+function refusal(code: string | undefined, status: number | undefined): ReactNode {
+  if (code === INVALID_EMAIL) return 'That does not look like an email address.'
+
   if (code === ACCOUNT_NOT_FOUND) {
     return (
       <>
@@ -39,7 +55,7 @@ function refusal(code: string | undefined): ReactNode {
     )
   }
 
-  if (code === 'EMAIL_NOT_VERIFIED') {
+  if (code === EMAIL_NOT_VERIFIED) {
     return (
       <>
         Confirm your address before signing in. The link was emailed when you registered.{' '}
@@ -51,15 +67,21 @@ function refusal(code: string | undefined): ReactNode {
     )
   }
 
-  return (
-    <>
-      That password is not right.{' '}
-      <Link href="/forgot-password" className="border-b border-current pb-0.5">
-        Reset it
-      </Link>
-      .
-    </>
-  )
+  if (code === INVALID_EMAIL_OR_PASSWORD) {
+    return (
+      <>
+        That password is not right.{' '}
+        <Link href="/forgot-password" className="border-b border-current pb-0.5">
+          Reset it
+        </Link>
+        .
+      </>
+    )
+  }
+
+  if (status === 429) return 'Too many attempts. Wait a minute and try again.'
+
+  return 'Something went wrong at our end. Try again in a moment.'
 }
 
 export function SignInForm() {
@@ -82,7 +104,7 @@ export function SignInForm() {
           password: values.password,
         })
         if (error) {
-          setFailure(refusal(error.code))
+          setFailure(refusal(error.code, error.status))
           return
         }
         router.push('/editor')

@@ -12,7 +12,6 @@ export default function ForgotPasswordPage() {
   return (
     <AccountShell
       title="Reset your password"
-      lead="Give us the address on the account and we will send a link to choose a new password."
       footer={
         <Link href="/sign-in" className="text-accent border-b border-current pb-0.5">
           Back to signing in

@@ -52,7 +52,8 @@ function address(name: string): string {
 /** Ours, and not Next's empty route announcer, which is also `role="alert"`. */
 const formError = 'p[role="alert"]'
 
-const PASSWORD = 'a-long-enough-password'
+/** Fifteen characters, a digit, and hyphens for symbols. See `PASSWORD_RULES`. */
+const PASSWORD = 'a-long-enough-1'
 
 /** Filling in the registration form, which four tests below have to do. */
 async function register(page: Page, name: string, email: string): Promise<void> {
@@ -226,7 +227,7 @@ test.describe('accounts', () => {
     // A real account and the wrong password, and the offer to reset it.
     await page.goto('/sign-in')
     await page.getByLabel('Email').fill(email)
-    await page.getByLabel('Password').fill('not-the-right-password')
+    await page.getByLabel('Password').fill('not-the-right-1')
     await page.getByRole('button', { name: 'Sign in' }).click()
     await expect(page.locator(formError)).toContainText('password is not right')
     await page.locator(formError).getByRole('link', { name: 'Reset it' }).click()
@@ -240,8 +241,36 @@ test.describe('accounts', () => {
     await page.getByRole('button', { name: 'Sign in' }).click()
     await expect(page.getByText('Enter your email.')).toBeVisible()
     await expect(page.getByText('Enter your password.')).toBeVisible()
-    await expect(page.locator('body')).not.toContainText('Too small')
-    await expect(page.locator('body')).not.toContainText('expected string')
+
+    for (const [path, button] of [
+      ['/forgot-password', 'Send the link'],
+      ['/resend-verification', 'Send a new link'],
+    ] as const) {
+      await page.goto(path)
+      await page.getByLabel('Email').fill('not-an-address')
+      await page.getByRole('button', { name: button }).click()
+      await expect(page.locator(formError)).toContainText('does not look like an email')
+    }
+
+    for (const path of ['/sign-in', '/sign-up', '/forgot-password', '/resend-verification']) {
+      await page.goto(path)
+      await expect(page.locator('body')).not.toContainText('Too small')
+      await expect(page.locator('body')).not.toContainText('expected string')
+      await expect(page.locator('body')).not.toContainText('Invalid input')
+    }
+  })
+
+  test('a bad address never comes back blamed on the password', async ({ page }) => {
+    // Every unrecognised outcome used to fall through to "that password is not
+    // right", so typing anything at all in the email box said the password was
+    // wrong. Only the server saying so means that now.
+    await page.goto('/sign-in')
+    await page.getByLabel('Email').fill('not-an-address')
+    await page.getByLabel('Password').fill(PASSWORD)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+
+    await expect(page.locator(formError)).toContainText('does not look like an email')
+    await expect(page.locator(formError)).not.toContainText('password is not right')
   })
 
   test('asking for a reset says the same thing for any address', async ({ page }) => {
@@ -256,33 +285,80 @@ test.describe('accounts', () => {
   test('the password rules are shown before they are broken, not after', async ({ page }) => {
     await page.goto('/sign-up')
     const create = page.getByRole('button', { name: 'Create account' })
-    const long = page.getByRole('listitem').filter({ hasText: 'At least 12 characters' })
-    const same = page.getByRole('listitem').filter({ hasText: 'Both passwords match' })
+    const rule = (text: string) =>
+      page.getByRole('listitem').filter({ hasText: text }).locator('.requirement-mark')
 
-    // On screen from the start, unmet, and the button held shut behind them.
-    await expect(long).toBeVisible()
-    await expect(same).toBeVisible()
-    await expect(long.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+    // On screen from the start, none of them met, and the button held shut.
+    for (const text of ['At least 12 characters', 'A number', 'A symbol', 'Both passwords match']) {
+      await expect(rule(text)).toHaveAttribute('data-met', 'false')
+    }
     await expect(create).toBeDisabled()
 
     await page.getByLabel('Name').fill('Ada')
     await page.getByLabel('Email').fill(address('rules'))
-    await page.getByLabel('Password', { exact: true }).fill('short')
-    await expect(long.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+
+    // Each rule fills in on its own as the thing it asks for appears.
+    await page.getByLabel('Password', { exact: true }).fill('abcdefghijklm')
+    await expect(rule('At least 12 characters')).toHaveAttribute('data-met', 'true')
+    await expect(rule('A number')).toHaveAttribute('data-met', 'false')
+    await expect(rule('A symbol')).toHaveAttribute('data-met', 'false')
+    await expect(create).toBeDisabled()
+
+    await page.getByLabel('Password', { exact: true }).fill('abcdefghijklm1')
+    await expect(rule('A number')).toHaveAttribute('data-met', 'true')
+    await expect(rule('A symbol')).toHaveAttribute('data-met', 'false')
     await expect(create).toBeDisabled()
 
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
-    await expect(long.locator('.requirement-mark')).toHaveAttribute('data-met', 'true')
-    // The second field is still empty, so this is still not a submittable form.
-    await expect(same.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+    await expect(rule('A symbol')).toHaveAttribute('data-met', 'true')
+    // The second box is still empty, so this is still not a submittable form.
+    await expect(rule('Both passwords match')).toHaveAttribute('data-met', 'false')
     await expect(create).toBeDisabled()
 
-    await page.getByLabel('Repeat password').fill('a-different-password')
-    await expect(same.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+    await page.getByLabel('Repeat password').fill('a-different-1')
+    await expect(rule('Both passwords match')).toHaveAttribute('data-met', 'false')
 
     await page.getByLabel('Repeat password').fill(PASSWORD)
-    await expect(same.locator('.requirement-mark')).toHaveAttribute('data-met', 'true')
+    await expect(rule('Both passwords match')).toHaveAttribute('data-met', 'true')
     await expect(create).toBeEnabled()
+  })
+
+  test('choosing a new password asks for exactly the same things', async ({ page }) => {
+    // The two pages that set a password used to differ: one spelled the rules
+    // out, the other waited for a rejected submit to mention them.
+    const email = address('resetter')
+    await register(page, 'Reset Me', email)
+    await expect(page.getByText('Check your inbox.')).toBeVisible()
+    await page.goto(await linkSentTo(email))
+
+    await page.goto('/forgot-password')
+    await page.getByLabel('Email').fill(email)
+    await page.getByRole('button', { name: 'Send the link' }).click()
+    await expect(page.getByText('Check your inbox.')).toBeVisible()
+
+    await page.goto(await linkSentTo(email))
+    const save = page.getByRole('button', { name: 'Change my password' })
+    const rule = (text: string) =>
+      page.getByRole('listitem').filter({ hasText: text }).locator('.requirement-mark')
+
+    for (const text of ['At least 12 characters', 'A number', 'A symbol', 'Both passwords match']) {
+      await expect(rule(text)).toHaveAttribute('data-met', 'false')
+    }
+    await expect(save).toBeDisabled()
+
+    const chosen = 'a-brand-new-2'
+    await page.getByLabel('New password', { exact: true }).fill(chosen)
+    await page.getByLabel('Repeat new password').fill(chosen)
+    await expect(save).toBeEnabled()
+    await save.click()
+    await expect(page.getByText('Your password is changed')).toBeVisible()
+
+    // And the new one is the one that works.
+    await page.goto('/sign-in')
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill(chosen)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page).toHaveURL(/\/editor$/)
   })
 
   test('what an account is for is there to ask for, not to read past', async ({ page }) => {

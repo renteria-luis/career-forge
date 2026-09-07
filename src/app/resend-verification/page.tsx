@@ -21,7 +21,7 @@ export default function ResendVerificationPage() {
   return (
     <AccountShell
       title="Send the link again"
-      lead="If the confirmation email never arrived, or the hour ran out, we will send another."
+      aside="Use this if the confirmation email never arrived, or if the hour it was good for has run out. The new link replaces the old one."
       footer={
         <Link href="/sign-in" className="text-accent border-b border-current pb-0.5">
           Back to signing in

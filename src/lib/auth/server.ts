@@ -7,9 +7,9 @@ import * as schema from '@/lib/db/schema'
 import { checkBreached } from './breached'
 import { sendEmail } from './email'
 import { hashPassword, verifyPassword } from './password'
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, normaliseEmail } from './identity'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, emailSchema, unmetRules } from './identity'
 import { CALLER_HEADER } from '@/lib/http/caller'
-import { ACCOUNT_NOT_FOUND, EMAIL_IN_USE } from './codes'
+import { ACCOUNT_NOT_FOUND, EMAIL_IN_USE, PASSWORD_BREACHED, PASSWORD_TOO_WEAK } from './codes'
 
 /**
  * The account system, configured in one place.
@@ -87,28 +87,40 @@ function resetEmail(url: string): { subject: string; text: string } {
 }
 
 /**
- * Hashing, with a breached password refused first.
+ * Hashing, with the password policy applied first.
  *
- * The check sits inside hashing rather than in front of the sign-up route, and
+ * The checks sit inside hashing rather than in front of the sign-up route, and
  * that is the whole point: every path that sets a password has to hash it, so
- * there is no route to add later that quietly skips this. A list of paths to
+ * there is no route to add later that quietly skips them. A list of paths to
  * guard would have needed remembering, and password reset — reached months
  * after registering, when a person is most likely to reuse something old — is
  * exactly the one that would have been left off.
  *
- * The library ships a plugin for this and it is not used, for one reason: it
- * fails closed. A failed request to the corpus becomes a 500, so an outage at a
- * third party would stop anyone registering or resetting a password. See
- * `checkBreached`, which fails open and says which it did.
+ * The library ships a plugin for the breach check and it is not used, for one
+ * reason: it fails closed. A failed request to the corpus becomes a 500, so an
+ * outage at a third party would stop anyone registering or resetting a
+ * password. See `checkBreached`, which fails open and says which it did.
  */
-async function hashUnlessBreached(password: string): Promise<string> {
+async function hashOrRefuse(password: string): Promise<string> {
+  // The same list the marks under the field are drawn from, so the form cannot
+  // promise something this does not enforce.
+  const unmet = unmetRules(password)
+  if (unmet.length > 0) {
+    throw APIError.from('BAD_REQUEST', {
+      code: PASSWORD_TOO_WEAK,
+      message: `That password needs: ${unmet.map((rule) => rule.label.toLowerCase()).join(', ')}.`,
+    })
+  }
+
   const { breached } = await checkBreached(password)
   if (breached) {
-    throw new APIError('BAD_REQUEST', {
+    throw APIError.from('BAD_REQUEST', {
+      code: PASSWORD_BREACHED,
       message:
         'That password appears in a public list of leaked passwords. Choose one you have not used elsewhere.',
     })
   }
+
   return hashPassword(password)
 }
 
@@ -139,11 +151,18 @@ const identifyTheFailure = createAuthMiddleware(async (ctx) => {
   if (ctx.path !== '/sign-in/email' && ctx.path !== '/sign-up/email') return
 
   const body: unknown = ctx.body
-  const email =
-    body !== null && typeof body === 'object' ? (body as { email?: unknown }).email : null
-  if (typeof email !== 'string' || email === '') return
+  const raw = body !== null && typeof body === 'object' ? (body as { email?: unknown }).email : null
 
-  const found = await ctx.context.internalAdapter.findUserByEmail(normaliseEmail(email))
+  /**
+   * Anything that is not an address is left to the library, which answers
+   * `INVALID_EMAIL`. Looking it up here instead would truthfully report that no
+   * account has it — and send somebody to the registration page carrying a
+   * typo, when what they needed to hear was that they had mistyped.
+   */
+  const parsed = emailSchema.safeParse(raw)
+  if (!parsed.success) return
+
+  const found = await ctx.context.internalAdapter.findUserByEmail(parsed.data)
 
   if (ctx.path === '/sign-up/email' && found?.user) {
     throw APIError.from('UNPROCESSABLE_ENTITY', {
@@ -183,7 +202,7 @@ function create() {
        * cheaper, so there is nothing being traded away.
        */
       password: {
-        hash: hashUnlessBreached,
+        hash: hashOrRefuse,
         verify: ({ hash, password }) => verifyPassword(hash, password),
       },
       sendResetPassword: async ({ user, url }) => {
@@ -272,13 +291,28 @@ function create() {
 }
 
 /**
- * Held on globalThis for the reason the compiler and the pool are: HMR
- * replacing this module would otherwise build a fresh instance, and its
- * in-memory rate limits, on every save.
+ * Built once, and where "once" means depends on whether this is development.
+ *
+ * In the deployment it is held on globalThis, for the reason the compiler and
+ * the pool are: this instance owns the in-memory attempt limits, and a fresh
+ * one would hand every caller a fresh allowance.
+ *
+ * In development it is deliberately not, and that is a bug being fixed rather
+ * than a preference. Hot reloading replaces this module and leaves globalThis
+ * alone, so every change to the configuration below — a new hook, a different
+ * limit, a changed message — was silently ignored until the dev server was
+ * restarted. Hours were spent testing a build that no longer existed. A
+ * module-level variable is replaced along with the module, so a save takes
+ * effect; the limits resetting on save costs nothing on one machine.
  */
 const globalForAuth = globalThis as { __auth?: ReturnType<typeof create> }
+let reloadable: ReturnType<typeof create> | undefined
 
 export function auth(): ReturnType<typeof create> {
+  if (process.env.NODE_ENV === 'development') {
+    reloadable ??= create()
+    return reloadable
+  }
   globalForAuth.__auth ??= create()
   return globalForAuth.__auth
 }

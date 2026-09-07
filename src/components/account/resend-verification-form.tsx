@@ -2,24 +2,22 @@
 
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Button, Field } from '@/components/editor/fields'
 import { authClient } from '@/lib/auth/client'
-import { emailSchema } from '@/lib/auth/identity'
-import { CheckYourInbox } from './shell'
+import { CheckYourInbox, FormError } from './shell'
 
-const schema = z.object({ email: emailSchema })
-
-type Values = z.input<typeof schema>
+interface Values {
+  email: string
+}
 
 export function ResendVerificationForm() {
   const [asked, setAsked] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<Values>({ resolver: zodResolver(schema), mode: 'onBlur' })
+    formState: { isSubmitting },
+  } = useForm<Values>({ defaultValues: { email: '' } })
 
   if (asked) {
     return (
@@ -50,17 +48,24 @@ export function ResendVerificationForm() {
          * into a way to test addresses. The failure is not lost — it is logged
          * on the server, where the person who can actually fix it will see it.
          */
-        await authClient.sendVerificationEmail({ email: values.email })
+        setFailure(null)
+        const { error } = await authClient.sendVerificationEmail({ email: values.email })
+        // A malformed address is the one thing worth saying, and only once the
+        // button has been pressed.
+        // Only a rejected body, which is a malformed address. Anything else —
+        // including a delivery failure, which can only happen for an address
+        // that exists — falls through to the same screen every address gets,
+        // so this stays a form that cannot be asked who is registered.
+        if (error?.status === 400) {
+          setFailure('That does not look like an email address.')
+          return
+        }
         setAsked(true)
       })}
     >
-      <Field
-        label="Email"
-        type="email"
-        autoComplete="email"
-        error={errors.email?.message}
-        {...register('email')}
-      />
+      <Field label="Email" type="email" autoComplete="email" {...register('email')} />
+
+      <FormError message={failure} />
 
       <Button type="submit" variant="primary" disabled={isSubmitting} className="self-start">
         {isSubmitting ? 'Sending…' : 'Send a new link'}

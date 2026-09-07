@@ -2,26 +2,28 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { Button, Field } from '@/components/editor/fields'
+import { useForm, useWatch } from 'react-hook-form'
+import { Button } from '@/components/editor/fields'
 import { authClient } from '@/lib/auth/client'
-import { MIN_PASSWORD_LENGTH, passwordSchema } from '@/lib/auth/identity'
 import { FormError } from './shell'
+import { PasswordFields, passwordAccepted } from './password-fields'
 
-const schema = z.object({ password: passwordSchema })
-
-type Values = z.input<typeof schema>
+interface Values {
+  password: string
+  confirm: string
+}
 
 export function ResetPasswordForm({ token }: { token: string | null }) {
   const [done, setDone] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const {
     register,
+    control,
     handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<Values>({ resolver: zodResolver(schema), mode: 'onBlur' })
+    formState: { isSubmitting },
+  } = useForm<Values>({ defaultValues: { password: '', confirm: '' } })
+
+  const [password, confirm] = useWatch({ control, name: ['password', 'confirm'] })
 
   if (!token) {
     return (
@@ -62,18 +64,22 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
         setDone(true)
       })}
     >
-      <Field
+      <PasswordFields
         label="New password"
-        type="password"
-        autoComplete="new-password"
-        hint={`At least ${MIN_PASSWORD_LENGTH} characters, and not one that has been in a public breach.`}
-        error={errors.password?.message}
-        {...register('password')}
+        password={password}
+        confirm={confirm}
+        fields={register('password')}
+        confirmFields={register('confirm')}
       />
 
       <FormError message={failure} />
 
-      <Button type="submit" variant="primary" disabled={isSubmitting} className="self-start">
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={isSubmitting || !passwordAccepted(password, confirm)}
+        className="self-start"
+      >
         {isSubmitting ? 'Saving…' : 'Change my password'}
       </Button>
     </form>

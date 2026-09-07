@@ -33,8 +33,11 @@ export function AccountShell({
         Career Forge
       </Link>
 
-      <div className="mt-6 flex items-center gap-2">
-        <h1 className="text-strong font-display text-display-m font-semibold">{title}</h1>
+      {/* The mark sits inside the heading rather than beside it. Beside it, a
+          title that wrapped to two lines left the question mark stranded at the
+          far right of the column with nothing next to it. */}
+      <h1 className="text-strong font-display text-display-m mt-6 font-semibold">
+        {title}
         {aside && (
           /**
            * An explanation, folded away until somebody asks for it.
@@ -50,12 +53,12 @@ export function AccountShell({
             aria-controls={asideId}
             aria-label={`Why ${title.toLowerCase()}?`}
             onClick={() => setAsking((was) => !was)}
-            className="border-hairline text-muted hover:border-accent hover:text-accent flex h-5 w-5 items-center justify-center rounded-full border text-[0.7rem] leading-none font-medium transition-colors"
+            className="border-hairline text-muted hover:border-accent hover:text-accent ml-2 inline-flex h-5 w-5 -translate-y-1 items-center justify-center rounded-full border align-middle text-[0.7rem] leading-none font-medium transition-colors"
           >
             ?
           </button>
         )}
-      </div>
+      </h1>
 
       {/* In the flow rather than floating over it. As a popover anchored to
           that button it ran off the right edge of the screen, and every fix

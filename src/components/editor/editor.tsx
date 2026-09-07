@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
+import Link from 'next/link'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { clearDraft, loadDraft, saveDraft, serializeDraft } from '@/lib/editor/draft'
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
@@ -396,7 +397,14 @@ export function Editor() {
           {/* One size down on a phone. At 1.25rem the four things on this row
               added up to 425px inside a 412px screen, and "Save data" wrapped
               onto a row of its own — a whole band of chrome bought by 13px. */}
-          <h1 className="font-display text-body text-strong sm:text-title">Career Forge</h1>
+          {/* The name is the way back out. It was the only page with no route
+              home, which left the browser's back button as the only exit from
+              the one screen somebody spends an hour on. */}
+          <h1 className="font-display text-body text-strong sm:text-title">
+            <Link href="/" className="hover:text-accent transition-colors">
+              Career Forge
+            </Link>
+          </h1>
           {/* On the title's row rather than in a band of its own below it. That
               band was full width and bordered, and it existed to say six words.
               It has to stay here rather than move beside the paper controls,
