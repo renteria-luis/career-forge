@@ -46,16 +46,42 @@ function connectionString(): string {
   return url
 }
 
+export interface Connection {
+  connectionString: string
+  ssl: { rejectUnauthorized: true } | false
+}
+
 /**
- * TLS is on unless the connection string says otherwise.
+ * TLS, decided here and not by the connection string.
  *
- * Managed Postgres requires it and the local test database, which is a socket
- * on this machine, cannot offer it. `sslmode=disable` in the URL is how the
- * test harness says so, rather than a separate flag that could be left on in
- * production by accident.
+ * `sslmode` is deliberately stripped out, and that is the whole point of this
+ * function. Measured against the real database: with `sslmode` present in the
+ * URL, the driver builds its own TLS settings from it and the `ssl` option
+ * passed alongside is ignored completely — an option that reads like it
+ * controls the connection and does not. Handed a connection string with no
+ * `sslmode`, the same driver honours it: a certificate signed by the wrong
+ * authority is refused rather than accepted.
+ *
+ * Today that inversion happens to be safe, because this driver treats
+ * `sslmode=require` as full verification. It says in a warning on every
+ * connection that it will stop: the next major version adopts the standard
+ * meaning, under which `require` encrypts and verifies nothing. That would be a
+ * silent downgrade arriving with a dependency bump, on the one connection that
+ * carries password hashes and session tokens.
+ *
+ * So the mode is read once, for the single question worth asking, and then
+ * removed. `sslmode=disable` is the local test database saying it is a socket
+ * on this machine and cannot offer TLS. Everything else gets a verified
+ * certificate, whatever the URL claims to want.
  */
-function ssl(url: string): { rejectUnauthorized: boolean } | false {
-  return /[?&]sslmode=disable\b/.test(url) ? false : { rejectUnauthorized: true }
+export function connection(url: string): Connection {
+  const parsed = new URL(url)
+  const mode = parsed.searchParams.get('sslmode')
+  parsed.searchParams.delete('sslmode')
+  return {
+    connectionString: parsed.toString(),
+    ssl: mode === 'disable' ? false : { rejectUnauthorized: true },
+  }
 }
 
 /**
@@ -70,10 +96,8 @@ const globalForDb = globalThis as {
 
 export function pool(): Pool {
   if (!globalForDb.__pgPool) {
-    const url = connectionString()
     const created = new Pool({
-      connectionString: url,
-      ssl: ssl(url),
+      ...connection(connectionString()),
       max: MAX_CONNECTIONS,
       idleTimeoutMillis: IDLE_TIMEOUT_MS,
       connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
