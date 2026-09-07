@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { AccountShell } from '@/components/account/shell'
 import { ForgotPasswordForm } from '@/components/account/forgot-password-form'
 
@@ -12,11 +11,8 @@ export default function ForgotPasswordPage() {
   return (
     <AccountShell
       title="Reset your password"
-      footer={
-        <Link href="/sign-in" className="text-accent border-b border-current pb-0.5">
-          Back to signing in
-        </Link>
-      }
+      back={{ href: '/sign-in', label: 'Back to sign in' }}
+      aside="We email you a link that is good for an hour. Asking again replaces the link before it, so use the newest email you were sent."
     >
       <ForgotPasswordForm />
     </AccountShell>

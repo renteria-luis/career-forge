@@ -16,11 +16,12 @@ export default async function SignInPage() {
   return (
     <AccountShell
       title="Sign in"
+      back={{ href: '/', label: 'Back to the home page' }}
       footer={
         <>
           No account yet?{' '}
           <Link href="/sign-up" className="text-accent border-b border-current pb-0.5">
-            Create one
+            Register
           </Link>
         </>
       }

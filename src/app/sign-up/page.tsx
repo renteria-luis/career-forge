@@ -18,6 +18,7 @@ export default async function SignUpPage() {
   return (
     <AccountShell
       title="Create an account"
+      back={{ href: '/sign-in', label: 'Back to sign in' }}
       aside="An account is what lets generated writing be attributed to you. Everything else here works without one."
       footer={
         <>

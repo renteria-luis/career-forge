@@ -26,8 +26,19 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   const [password, confirm] = useWatch({ control, name: ['password', 'confirm'] })
 
   if (!token) {
+    // No token in the address at all: an old link, one a mail client cut in
+    // half, or the page opened on its own. Saying which is no help to the
+    // person reading it, and every one of those is fixed the same way.
     return (
-      <FormError message="This link is missing its token. Ask for a new one and use the most recent email." />
+      <div className="flex flex-col items-start gap-4">
+        <FormError message="This link has expired. Ask for a new one and we will email it to you." />
+        <Link
+          href="/forgot-password"
+          className="bg-accent text-on-accent rounded-edge text-small px-4 py-2 font-medium"
+        >
+          Send me a new link
+        </Link>
+      </div>
     )
   }
 

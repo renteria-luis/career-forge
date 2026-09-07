@@ -3,6 +3,13 @@
 import Link from 'next/link'
 import { useId, useState, type ReactNode } from 'react'
 
+/** Where the "<" goes, and what a screen reader is told it is. */
+export interface Retreat {
+  href: string
+  /** Read out in place of the arrow. A whole phrase: "Back to sign in". */
+  label: string
+}
+
 /**
  * The frame every account page shares.
  *
@@ -13,6 +20,7 @@ export function AccountShell({
   title,
   lead,
   aside,
+  back,
   children,
   footer,
 }: {
@@ -21,11 +29,19 @@ export function AccountShell({
   lead?: string
   /** Sits behind a question mark, for what only some people want to read. */
   aside?: string
+  /** The way back to wherever this page is reached from. */
+  back?: Retreat
   children: ReactNode
   footer?: ReactNode
 }) {
   const asideId = useId()
   const [asking, setAsking] = useState(false)
+
+  // The mark travels with the last word. Left to wrap on its own it landed on
+  // a line by itself under "Create an account", which reads as a stray mark
+  // rather than as part of the heading.
+  const words = title.split(' ')
+  const lastWord = words.pop()
 
   return (
     <main className="mx-auto w-full max-w-sm px-6 py-16 sm:py-24">
@@ -33,32 +49,63 @@ export function AccountShell({
         Career Forge
       </Link>
 
-      {/* The mark sits inside the heading rather than beside it. Beside it, a
-          title that wrapped to two lines left the question mark stranded at the
-          far right of the column with nothing next to it. */}
-      <h1 className="text-strong font-display text-display-m mt-6 font-semibold">
-        {title}
-        {aside && (
-          /**
-           * An explanation, folded away until somebody asks for it.
-           *
-           * What this replaces sat permanently above the form, which is a
-           * paragraph between a person and the control they came to press.
-           * Nobody arriving at a sign-up page needs to be told what an account
-           * is; the one or two who wonder why this one wants them can ask.
-           */
-          <button
-            type="button"
-            aria-expanded={asking}
-            aria-controls={asideId}
-            aria-label={`Why ${title.toLowerCase()}?`}
-            onClick={() => setAsking((was) => !was)}
-            className="border-hairline text-muted hover:border-accent hover:text-accent ml-2 inline-flex h-5 w-5 -translate-y-1 items-center justify-center rounded-full border align-middle text-[0.7rem] leading-none font-medium transition-colors"
+      <div className="mt-6 flex items-start gap-3">
+        {/* Beside the title rather than above it, because that is where a
+            person looks for it, and it is a link rather than history.back():
+            these pages are also arrived at from a mailbox, where there is no
+            previous page in this tab to go back to. */}
+        {back && (
+          <Link
+            href={back.href}
+            aria-label={back.label}
+            className="border-hairline text-muted hover:border-accent hover:text-accent rounded-edge mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center border transition-colors"
           >
-            ?
-          </button>
+            <span className="back-arrow" aria-hidden="true" />
+          </Link>
         )}
-      </h1>
+
+        {/* The mark sits inside the heading rather than beside it. Beside it, a
+            title that wrapped to two lines left the question mark stranded at the
+            far right of the column with nothing next to it. */}
+        <h1 className="text-strong font-display text-display-m font-semibold text-balance">
+          {words.length > 0 && `${words.join(' ')} `}
+          <span className="whitespace-nowrap">
+            {lastWord}
+            {aside && (
+              /**
+               * An explanation, folded away until somebody asks for it.
+               *
+               * What this replaces sat permanently above the form, which is a
+               * paragraph between a person and the control they came to press.
+               * Nobody arriving at a sign-up page needs to be told what an account
+               * is; the one or two who wonder why this one wants them can ask.
+               *
+               * Pointing at it is enough to read it. It stays a button rather than
+               * becoming a hover style, because hover is not something a keyboard
+               * or a touchscreen has: focus opens it too, Escape closes it, and a
+               * tap opens it and leaves it open.
+               */
+              <button
+                type="button"
+                aria-expanded={asking}
+                aria-controls={asideId}
+                aria-label={`More about "${title}"`}
+                onMouseEnter={() => setAsking(true)}
+                onMouseLeave={() => setAsking(false)}
+                onFocus={() => setAsking(true)}
+                onBlur={() => setAsking(false)}
+                onClick={() => setAsking(true)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setAsking(false)
+                }}
+                className="border-hairline text-muted hover:border-accent hover:text-accent ml-2 inline-flex h-5 w-5 -translate-y-1 items-center justify-center rounded-full border align-middle text-[0.7rem] leading-none font-medium transition-colors focus-visible:rounded-full"
+              >
+                ?
+              </button>
+            )}
+          </span>
+        </h1>
+      </div>
 
       {/* In the flow rather than floating over it. As a popover anchored to
           that button it ran off the right edge of the screen, and every fix

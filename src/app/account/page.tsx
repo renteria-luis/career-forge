@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AccountShell } from '@/components/account/shell'
 import { SignOutButton } from '@/components/account/sign-out-button'
@@ -15,14 +14,7 @@ export default async function AccountPage() {
   if (!user) redirect('/sign-in')
 
   return (
-    <AccountShell
-      title="Your account"
-      footer={
-        <Link href="/editor" className="text-accent border-b border-current pb-0.5">
-          Back to the editor
-        </Link>
-      }
-    >
+    <AccountShell title="Your account" back={{ href: '/editor', label: 'Back to the editor' }}>
       <dl className="flex flex-col gap-4">
         <div>
           <dt className="text-muted text-small">Name</dt>

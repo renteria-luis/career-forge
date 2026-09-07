@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { AccountShell } from '@/components/account/shell'
 import { ResendVerificationForm } from '@/components/account/resend-verification-form'
 
@@ -21,12 +20,8 @@ export default function ResendVerificationPage() {
   return (
     <AccountShell
       title="Send the link again"
+      back={{ href: '/sign-in', label: 'Back to sign in' }}
       aside="Use this if the confirmation email never arrived, or if the hour it was good for has run out. The new link replaces the old one."
-      footer={
-        <Link href="/sign-in" className="text-accent border-b border-current pb-0.5">
-          Back to signing in
-        </Link>
-      }
     >
       <ResendVerificationForm />
     </AccountShell>

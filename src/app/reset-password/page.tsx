@@ -13,6 +13,7 @@ export default async function ResetPasswordPage({ searchParams }: PageProps<'/re
   return (
     <AccountShell
       title="Choose a new password"
+      back={{ href: '/sign-in', label: 'Back to sign in' }}
       aside="Every session opened with the old password ends when you save this, on every device."
     >
       <ResetPasswordForm token={typeof token === 'string' ? token : null} />

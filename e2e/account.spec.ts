@@ -124,6 +124,12 @@ test.describe('accounts', () => {
     await expect(page.getByText('Ada Lovelace')).toBeVisible()
     await expect(page.getByText(email)).toBeVisible()
 
+    // The one screen reached from inside the app rather than from a mailbox,
+    // and the only one whose way back is not the sign-in page.
+    await page.getByRole('link', { name: 'Back to the editor' }).click()
+    await expect(page).toHaveURL(/\/editor$/)
+
+    await page.goto('/account')
     await page.getByRole('button', { name: 'Sign out' }).click()
     await expect(page).toHaveURL('/')
     await page.goto('/account')
@@ -363,21 +369,89 @@ test.describe('accounts', () => {
 
   test('what an account is for is there to ask for, not to read past', async ({ page }) => {
     await page.goto('/sign-up')
-    const ask = page.getByRole('button', { name: /^Why/ })
+    const ask = page.getByRole('button', { name: /^More about/ })
     const explanation = page.getByText('attributed to you')
 
     await expect(explanation).toBeHidden()
     await expect(ask).toHaveAttribute('aria-expanded', 'false')
 
-    await ask.click()
+    // Pointing at it is enough. Reaching for a mouse button to read one
+    // sentence is a step nobody should have to take.
+    await ask.hover()
     await expect(explanation).toBeVisible()
     await expect(ask).toHaveAttribute('aria-expanded', 'true')
 
     // And it stays inside the column at the narrowest screen the app supports.
+    // Hovered again after the resize: moving the viewport moves the pointer off
+    // the button, which correctly closes it.
     await page.setViewportSize({ width: 320, height: 720 })
+    await ask.hover()
+    await expect(explanation).toBeVisible()
     const box = (await explanation.boundingBox())!
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(320)
+  })
+
+  test('the explanation opens without a mouse, and Escape closes it', async ({ page }) => {
+    // Hover alone would put this out of reach of a keyboard, which is the
+    // reason it is still a button and not a `:hover` rule.
+    await page.goto('/sign-up')
+    const ask = page.getByRole('button', { name: /^More about/ })
+    const explanation = page.getByText('attributed to you')
+
+    await ask.focus()
+    await expect(explanation).toBeVisible()
+
+    await page.keyboard.press('Escape')
+    await expect(explanation).toBeHidden()
+  })
+
+  test('a tap opens the explanation and leaves it open', async ({ page }) => {
+    // A touchscreen has no hover to give. The click has to be enough on its
+    // own, and it must not toggle the thing a phone's synthetic mouseover has
+    // already opened straight back shut.
+    await page.goto('/reset-password')
+    const ask = page.getByRole('button', { name: /^More about/ })
+
+    await ask.click()
+    await expect(page.getByText('on every device')).toBeVisible()
+  })
+
+  test('every account screen has a way back, and it goes somewhere sensible', async ({ page }) => {
+    // Reached from a mailbox as often as from another page, so these are links
+    // to a known place rather than browser history: on a fresh tab there is no
+    // previous page to return to.
+    const retreats: [string, string, string][] = [
+      ['/sign-in', 'Back to the home page', '/'],
+      ['/sign-up', 'Back to sign in', '/sign-in'],
+      ['/forgot-password', 'Back to sign in', '/sign-in'],
+      ['/reset-password', 'Back to sign in', '/sign-in'],
+      ['/resend-verification', 'Back to sign in', '/sign-in'],
+      ['/verify-email', 'Back to the home page', '/'],
+    ]
+
+    for (const [path, name, destination] of retreats) {
+      await page.goto(path)
+      await page.getByRole('link', { name }).click()
+      await expect(page).toHaveURL(destination)
+    }
+  })
+
+  test('registering is one link from signing in, and back again', async ({ page }) => {
+    await page.goto('/sign-in')
+    await page.getByRole('link', { name: 'Register' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Create an account')
+
+    await page.getByRole('link', { name: 'Back to sign in' }).click()
+    await expect(page).toHaveURL(/\/sign-in$/)
+  })
+
+  test('a reset link with no token says so in words a person can act on', async ({ page }) => {
+    await page.goto('/reset-password')
+    await expect(page.locator(formError)).toContainText('This link has expired')
+
+    await page.getByRole('link', { name: 'Send me a new link' }).click()
+    await expect(page).toHaveURL(/\/forgot-password$/)
   })
 
   test('the account pages are not offered to search engines', async ({ request }) => {

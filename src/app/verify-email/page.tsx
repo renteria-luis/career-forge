@@ -20,6 +20,7 @@ export default async function VerifyEmailPage({ searchParams }: PageProps<'/veri
   return (
     <AccountShell
       title={failed ? 'That link did not work' : 'Address confirmed'}
+      back={{ href: '/', label: 'Back to the home page' }}
       lead={
         failed
           ? 'It has probably expired — they are good for an hour. Sign in and we will send you another.'
