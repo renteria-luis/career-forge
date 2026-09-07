@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { PairedReading } from '@/components/home/paired-reading'
+import { currentUser } from '@/lib/auth/session'
 import { sampleProfile } from '@/lib/resume/fixtures'
 
 /**
@@ -11,10 +12,22 @@ import { sampleProfile } from '@/lib/resume/fixtures'
  * prose — the same resume as a page and as the record a parser keeps.
  */
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await currentUser()
+
   return (
     <main className="mx-auto w-full max-w-5xl px-6 py-20 sm:py-28">
-      <p className="text-muted text-micro font-mono uppercase">Career Forge</p>
+      {/* The only entry to the account, and it stays out of the way. Writing a
+          resume needs no account, so this is a line rather than a nav bar. */}
+      <div className="flex items-baseline justify-between gap-4">
+        <p className="text-muted text-micro font-mono uppercase">Career Forge</p>
+        <Link
+          href={user ? '/account' : '/sign-in'}
+          className="text-muted hover:text-accent text-small"
+        >
+          {user ? user.name : 'Sign in'}
+        </Link>
+      </div>
 
       <h1 className="text-strong font-display text-display-l sm:text-display-xl mt-6 max-w-3xl font-semibold">
         Build your resume.

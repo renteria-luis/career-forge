@@ -1132,4 +1132,17 @@ test.describe('the editor gets out of its own way', () => {
     await page.getByRole('tab', { name: 'Layout' }).click()
     await expect(page.getByRole('button', { name: 'Clear everything' })).toBeVisible()
   })
+
+  test('the name in the header is the way back out', async ({ page }) => {
+    await page.goto('/editor')
+    await expect(page.getByLabel('Full name')).toBeVisible({ timeout: 15_000 })
+
+    // This was the only page with no route home, which left the browser's back
+    // button as the only exit from the screen somebody spends an hour on.
+    await page
+      .getByRole('heading', { level: 1 })
+      .getByRole('link', { name: 'Career Forge' })
+      .click()
+    await expect(page).toHaveURL('/')
+  })
 })

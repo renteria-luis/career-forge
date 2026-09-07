@@ -9,6 +9,9 @@ export default defineConfig({
     // Playwright owns anything that needs a browser; Vitest stays on pure logic
     // so the unit suite runs in under a second and nobody skips it.
     include: ['src/**/*.test.ts'],
+    // The database-backed suite has its own command and its own timeouts; see
+    // `vitest.db.config.ts`.
+    exclude: ['src/**/*.db.test.ts'],
     environment: 'node',
     coverage: {
       provider: 'v8',

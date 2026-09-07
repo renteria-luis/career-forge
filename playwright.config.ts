@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { E2E_DATABASE_URL, E2E_MAIL_DIR } from './e2e/environment'
 
 const PORT = 3100
 // localhost, not 127.0.0.1: the dev server rejects requests whose origin does
@@ -12,6 +13,14 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
+  /**
+   * Starts the database and empties the mailbox before the server does.
+   *
+   * The account pages are part of the app now, so a run without a database
+   * would skip the one flow that has to work end to end.
+   */
+  globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   use: {
     baseURL,
     trace: 'on-first-retry',
@@ -28,5 +37,20 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
+    env: {
+      DATABASE_URL: E2E_DATABASE_URL,
+      // Fixed, so a session cookie signed on one run is not accepted on the
+      // next by accident. It is a value the suite owns and nothing else sees.
+      BETTER_AUTH_SECRET: 'career-forge-end-to-end-secret',
+      BETTER_AUTH_URL: baseURL,
+      // Messages land here as files and the suite follows the link in one.
+      // `sendEmail` treats a named sink as an instruction, ahead of any
+      // provider it finds — but these two are blanked as well, because the
+      // first version of this ran on a machine with real credentials in
+      // .env.local and posted its @example.com fixtures to the live provider.
+      EMAIL_SINK_DIR: E2E_MAIL_DIR,
+      RESEND_API_KEY: '',
+      EMAIL_FROM: '',
+    },
   },
 })

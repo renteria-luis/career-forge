@@ -28,53 +28,13 @@ const PDFJS_RUNTIME_FILES = [
 ]
 
 /**
- * The Content-Security-Policy, as one place rather than a string per header.
+ * Everything except the Content-Security-Policy, which `proxy.ts` sets.
  *
- * `'unsafe-inline'` on scripts is deliberate and it is the weak part. Next
- * serves the RSC payload as inline script tags, so the alternatives are a nonce
- * — which needs middleware on every request and gives up static rendering for
- * all seven pages — or this. What it still buys is real: no script from another
- * origin can load, the page cannot be framed, a form cannot be pointed
- * somewhere else, and no plugin can be embedded.
- *
- * It is not yet the thing that stops a stored-XSS bug becoming session theft,
- * because there are no sessions. When accounts arrive this has to become
- * nonce-based; `docs/accounts-and-billing.md` records that as a requirement.
- *
- * The rest is what the app actually does:
- * - `blob:` workers and `wasm-unsafe-eval`, because pdf.js runs its parse in a
- *   worker and decodes some images through WebAssembly.
- * - `blob:` images and connections, for the preview canvas and the object URLs
- *   a download is handed through.
- * - `font-src 'self'`, because next/font self-hosts at build time. Nothing here
- *   fetches from Google at runtime, and the policy is what keeps it that way.
- * - `'unsafe-inline'` styles: Tailwind is a stylesheet, but React writes inline
- *   `style` attributes for the preview's page geometry.
+ * The policy is built around a per-request nonce now, so it cannot be a
+ * constant here. These five can, and they are sent on everything including the
+ * API routes and the static assets, where the proxy does not run.
  */
-const CSP = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  // Development serves hot-reload code through eval and a websocket; neither
-  // exists in the build that ships.
-  process.env.NODE_ENV === 'development'
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'"
-    : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
-  process.env.NODE_ENV === 'development'
-    ? "connect-src 'self' blob: data: ws:"
-    : "connect-src 'self' blob: data:",
-  "worker-src 'self' blob:",
-]
-  .join('; ')
-  .concat(process.env.NODE_ENV === 'development' ? '' : '; upgrade-insecure-requests')
-
 const SECURITY_HEADERS = [
-  { key: 'Content-Security-Policy', value: CSP },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   // frame-ancestors above already says this; this is for anything that reads

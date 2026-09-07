@@ -137,8 +137,9 @@ them.
    upload. Serving attacker-supplied documents is a denial-of-service surface
    and the ceiling is what makes it a bounded one. Both endpoints got this
    wrong once, in the same way and for the same reason — see below.
-5. **Rate limits** on both public endpoints, in `src/lib/http/limits.ts`. The
-   ceilings above bound one request; these bound how many.
+5. **Rate limits** on both public endpoints, in `src/lib/http/limits.ts`, and on
+   the account endpoints, in `src/lib/auth/server.ts`. The ceilings above bound
+   one request; these bound how many.
 
 ## The ceilings that were not ceilings
 
@@ -176,6 +177,10 @@ instance would need a shared store, and this note is the reminder.
 | `/api/compile` | 60 burst, 6/s   | 600 burst, 120/s |
 | `/api/import`  | 10 burst, 0.5/s | 120 burst, 30/s  |
 
+The account endpoints have their own, per address and per path, held the same
+way: 10 sign-ins a minute, 5 registrations, 5 password resets. A sign-in costs
+a 19 MiB Argon2id verify, which is what makes those numbers worth having.
+
 The per-caller figures come from what the app produces: the preview debounces
 at 250 ms, so a tab being typed into cannot exceed four compiles a second.
 The global figures come from what an instance costs to serve — 5.7 ms a compile
@@ -189,8 +194,32 @@ per-header-value one, and rotating the header restores a full allowance on every
 request. `TRUSTED_PROXY_HOPS` says how many hops to count back if a load
 balancer or CDN is ever put in front.
 
+`src/proxy.ts` resolves that address once and passes it on in a header of its
+own, because the account library reaches the same conclusion by a different
+route: handed a multi-value `X-Forwarded-For` with no list of trusted proxy
+addresses, it refuses to guess and falls back to one shared bucket for every
+visitor — which would turn its per-address login limit into a way for one caller
+to lock everybody out.
+
 The global bucket exists because that reasoning could still be wrong. It keys on
 nothing a caller controls, so it holds whatever happens to the address.
+
+## Accounts
+
+The account system needs four settings that nothing else here does, all named
+in `.env.example`: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and
+a `RESEND_API_KEY` with an `EMAIL_FROM`. Without the last two, a production
+build refuses to register anyone rather than creating accounts nobody can reach.
+
+Migrations are files in `drizzle/` and are applied deliberately, with
+`DATABASE_URL=... pnpm db:migrate`, before the deploy that needs them. Nothing
+runs them at container start: a failed migration would then take the service
+down instead of failing where somebody is watching.
+
+Every page is now rendered per request, because the Content-Security-Policy is
+built around a per-request nonce and a page generated at build time has no
+nonce to carry. That gives up static generation and CDN caching, neither of
+which this deployment uses.
 
 ## What is still missing before public mode
 
@@ -199,3 +228,9 @@ nothing a caller controls, so it holds whatever happens to the address.
 - `--min-instances 1`, which leaves the free tier. The allowance is 50 hours of
   vCPU per month and an always-warm instance consumes 720.
 - A shared store for the rate limits, the moment `--max-instances` goes above 1.
+  This now covers the account limits too, which are held in the same way and for
+  the same reason.
+- A container built and run with the account system in it. `@node-rs/argon2` is
+  a native binding, like the Typst compiler, and its `.node` file is traced into
+  `.next/standalone` — but this project has twice been caught by something that
+  worked locally and not in the image.
