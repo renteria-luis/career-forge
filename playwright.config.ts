@@ -43,9 +43,14 @@ export default defineConfig({
       // next by accident. It is a value the suite owns and nothing else sees.
       BETTER_AUTH_SECRET: 'career-forge-end-to-end-secret',
       BETTER_AUTH_URL: baseURL,
-      // No provider configured, so messages land here as files and the suite
-      // can follow the link in one.
+      // Messages land here as files and the suite follows the link in one.
+      // `sendEmail` treats a named sink as an instruction, ahead of any
+      // provider it finds — but these two are blanked as well, because the
+      // first version of this ran on a machine with real credentials in
+      // .env.local and posted its @example.com fixtures to the live provider.
       EMAIL_SINK_DIR: E2E_MAIL_DIR,
+      RESEND_API_KEY: '',
+      EMAIL_FROM: '',
     },
   },
 })
