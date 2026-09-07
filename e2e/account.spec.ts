@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { expect, test as base } from '@playwright/test'
+import { expect, test as base, type Page } from '@playwright/test'
 import { E2E_MAIL_DIR } from './environment'
 
 /**
@@ -54,6 +54,16 @@ const formError = 'p[role="alert"]'
 
 const PASSWORD = 'a-long-enough-password'
 
+/** Filling in the registration form, which four tests below have to do. */
+async function register(page: Page, name: string, email: string): Promise<void> {
+  await page.goto('/sign-up')
+  await page.getByLabel('Name').fill(name)
+  await page.getByLabel('Email').fill(email)
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await page.getByLabel('Repeat password').fill(PASSWORD)
+  await page.getByRole('button', { name: 'Create account' }).click()
+}
+
 /**
  * Every message sent to one address, newest first.
  *
@@ -85,20 +95,16 @@ test.describe('accounts', () => {
   test('register, confirm the address, then sign in', async ({ page }) => {
     const email = address('ada')
 
-    await page.goto('/sign-up')
-    await page.getByLabel('Name').fill('Ada Lovelace')
-    await page.getByLabel('Email').fill(email)
-    await page.getByLabel('Password').fill(PASSWORD)
-    await page.getByRole('button', { name: 'Create account' }).click()
+    await register(page, 'Ada Lovelace', email)
     await expect(page.getByText('Check your inbox.')).toBeVisible()
 
-    // Signing in before confirming is refused, and the refusal says nothing
-    // about whether the address exists.
+    // Signing in before confirming is refused, and the refusal names the thing
+    // to do about it.
     await page.goto('/sign-in')
     await page.getByLabel('Email').fill(email)
     await page.getByLabel('Password').fill(PASSWORD)
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await expect(page.locator(formError)).toContainText('do not match')
+    await expect(page.locator(formError)).toContainText('Confirm your address')
 
     await page.goto(await linkSentTo(email))
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Address confirmed')
@@ -126,11 +132,7 @@ test.describe('accounts', () => {
   test('a link that never arrived can be asked for again', async ({ page }) => {
     const email = address('lost')
 
-    await page.goto('/sign-up')
-    await page.getByLabel('Name').fill('Lost Link')
-    await page.getByLabel('Email').fill(email)
-    await page.getByLabel('Password').fill(PASSWORD)
-    await page.getByRole('button', { name: 'Create account' }).click()
+    await register(page, 'Lost Link', email)
     await expect(page.getByText('Check your inbox.')).toBeVisible()
 
     expect(await messagesSentTo(email)).toHaveLength(1)
@@ -182,20 +184,64 @@ test.describe('accounts', () => {
     }
   })
 
-  test('a taken address answers exactly like a free one', async ({ page }) => {
-    // The rule from docs/accounts-and-billing.md: registration must not be a
-    // way to ask who has an account here.
+  test('a taken address is named as taken, with the way out attached', async ({ page }) => {
+    // This deliberately reverses the anti-enumeration answer the library gives
+    // by default. What it costs is written down in `identifyTheFailure` and in
+    // docs/accounts-and-billing.md.
     const taken = address('grace')
 
-    for (const attempt of [1, 2]) {
-      await page.goto('/sign-up')
-      await page.getByLabel('Name').fill(`Grace ${attempt}`)
-      await page.getByLabel('Email').fill(taken)
-      await page.getByLabel('Password').fill(PASSWORD)
-      await page.getByRole('button', { name: 'Create account' }).click()
-      await expect(page.getByText('Check your inbox.')).toBeVisible()
-      await expect(page.locator(formError)).toHaveCount(0)
-    }
+    await register(page, 'Grace Hopper', taken)
+    await expect(page.getByText('Check your inbox.')).toBeVisible()
+
+    await register(page, 'Someone Else', taken)
+    await expect(page.locator(formError)).toContainText('already an account')
+    // Scoped to the refusal: the page footer offers a second "Sign in" link.
+    await page.locator(formError).getByRole('link', { name: 'Sign in' }).click()
+    await expect(page).toHaveURL(/\/sign-in$/)
+
+    // And the second attempt did not overwrite the first account.
+    await page.goto('/resend-verification')
+    await page.getByLabel('Email').fill(taken)
+    await page.getByRole('button', { name: 'Send a new link' }).click()
+    await page.goto(await linkSentTo(taken))
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Address confirmed')
+  })
+
+  test('signing in names which of the two was wrong', async ({ page }) => {
+    const email = address('known')
+    await register(page, 'Known Person', email)
+    await expect(page.getByText('Check your inbox.')).toBeVisible()
+    await page.goto(await linkSentTo(email))
+
+    // An address with no account, and the offer to make one.
+    await page.goto('/sign-in')
+    await page.getByLabel('Email').fill('nobody-here@example.com')
+    await page.getByLabel('Password').fill(PASSWORD)
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page.locator(formError)).toContainText('No account has that address')
+    // Scoped to the refusal: the page footer offers a second "Create one".
+    await page.locator(formError).getByRole('link', { name: 'Create one' }).click()
+    await expect(page).toHaveURL(/\/sign-up$/)
+
+    // A real account and the wrong password, and the offer to reset it.
+    await page.goto('/sign-in')
+    await page.getByLabel('Email').fill(email)
+    await page.getByLabel('Password').fill('not-the-right-password')
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page.locator(formError)).toContainText('password is not right')
+    await page.locator(formError).getByRole('link', { name: 'Reset it' }).click()
+    await expect(page).toHaveURL(/\/forgot-password$/)
+  })
+
+  test('nothing technical is ever shown to a person', async ({ page }) => {
+    // Zod's own wording used to reach the screen: "Too small: expected string
+    // to have >=1 characters". Nothing a person is shown comes from a library.
+    await page.goto('/sign-in')
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page.getByText('Enter your email.')).toBeVisible()
+    await expect(page.getByText('Enter your password.')).toBeVisible()
+    await expect(page.locator('body')).not.toContainText('Too small')
+    await expect(page.locator('body')).not.toContainText('expected string')
   })
 
   test('asking for a reset says the same thing for any address', async ({ page }) => {
@@ -207,15 +253,55 @@ test.describe('accounts', () => {
     }
   })
 
-  test('a short password never reaches the server', async ({ page }) => {
+  test('the password rules are shown before they are broken, not after', async ({ page }) => {
     await page.goto('/sign-up')
-    await page.getByLabel('Name').fill('Too Short')
-    await page.getByLabel('Email').fill(address('short'))
-    await page.getByLabel('Password').fill('short')
-    await page.getByRole('button', { name: 'Create account' }).click()
+    const create = page.getByRole('button', { name: 'Create account' })
+    const long = page.getByRole('listitem').filter({ hasText: 'At least 12 characters' })
+    const same = page.getByRole('listitem').filter({ hasText: 'Both passwords match' })
 
-    await expect(page.getByText('Check your inbox.')).toHaveCount(0)
-    await expect(page.getByLabel('Password')).toHaveAttribute('aria-invalid', 'true')
+    // On screen from the start, unmet, and the button held shut behind them.
+    await expect(long).toBeVisible()
+    await expect(same).toBeVisible()
+    await expect(long.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+    await expect(create).toBeDisabled()
+
+    await page.getByLabel('Name').fill('Ada')
+    await page.getByLabel('Email').fill(address('rules'))
+    await page.getByLabel('Password', { exact: true }).fill('short')
+    await expect(long.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+    await expect(create).toBeDisabled()
+
+    await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+    await expect(long.locator('.requirement-mark')).toHaveAttribute('data-met', 'true')
+    // The second field is still empty, so this is still not a submittable form.
+    await expect(same.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+    await expect(create).toBeDisabled()
+
+    await page.getByLabel('Repeat password').fill('a-different-password')
+    await expect(same.locator('.requirement-mark')).toHaveAttribute('data-met', 'false')
+
+    await page.getByLabel('Repeat password').fill(PASSWORD)
+    await expect(same.locator('.requirement-mark')).toHaveAttribute('data-met', 'true')
+    await expect(create).toBeEnabled()
+  })
+
+  test('what an account is for is there to ask for, not to read past', async ({ page }) => {
+    await page.goto('/sign-up')
+    const ask = page.getByRole('button', { name: /^Why/ })
+    const explanation = page.getByText('attributed to you')
+
+    await expect(explanation).toBeHidden()
+    await expect(ask).toHaveAttribute('aria-expanded', 'false')
+
+    await ask.click()
+    await expect(explanation).toBeVisible()
+    await expect(ask).toHaveAttribute('aria-expanded', 'true')
+
+    // And it stays inside the column at the narrowest screen the app supports.
+    await page.setViewportSize({ width: 320, height: 720 })
+    const box = (await explanation.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(320)
   })
 
   test('the account pages are not offered to search engines', async ({ request }) => {

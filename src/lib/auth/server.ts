@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { APIError } from 'better-auth/api'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 import { db } from '@/lib/db/client'
@@ -7,8 +7,9 @@ import * as schema from '@/lib/db/schema'
 import { checkBreached } from './breached'
 import { sendEmail } from './email'
 import { hashPassword, verifyPassword } from './password'
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './identity'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, normaliseEmail } from './identity'
 import { CALLER_HEADER } from '@/lib/http/caller'
+import { ACCOUNT_NOT_FOUND, EMAIL_IN_USE } from './codes'
 
 /**
  * The account system, configured in one place.
@@ -110,6 +111,54 @@ async function hashUnlessBreached(password: string): Promise<string> {
   }
   return hashPassword(password)
 }
+
+/**
+ * Says which of the two things went wrong, instead of neither.
+ *
+ * **This is a deliberate reversal, and it costs something.** The library goes
+ * out of its way to make these indistinguishable: signing in with an unknown
+ * address and with a wrong password return one code, and registering an address
+ * that already exists returns the same success as registering a new one, hashed
+ * against a fake user so even the timing matches. That protection exists
+ * because a form that answers differently is a form anyone can ask "does this
+ * person have an account here", and on a resume tool the answer to that is "is
+ * this person job hunting".
+ *
+ * It is given up for the person who is actually at the keyboard. "That email
+ * and password do not match" leaves someone with no way to tell a typo in their
+ * address from a typo in their password, and no idea which of registering,
+ * resetting or retyping is the thing to do next. That was judged to be the
+ * worse failure here, by the person whose project it is.
+ *
+ * What is not given up: the address still has to be confirmed before a session
+ * exists, the attempt limits still hold at ten a minute, and a wrong password
+ * still costs a full Argon2id verify. This makes membership askable. It does
+ * not make an account easier to break into.
+ */
+const identifyTheFailure = createAuthMiddleware(async (ctx) => {
+  if (ctx.path !== '/sign-in/email' && ctx.path !== '/sign-up/email') return
+
+  const body: unknown = ctx.body
+  const email =
+    body !== null && typeof body === 'object' ? (body as { email?: unknown }).email : null
+  if (typeof email !== 'string' || email === '') return
+
+  const found = await ctx.context.internalAdapter.findUserByEmail(normaliseEmail(email))
+
+  if (ctx.path === '/sign-up/email' && found?.user) {
+    throw APIError.from('UNPROCESSABLE_ENTITY', {
+      code: EMAIL_IN_USE,
+      message: 'There is already an account with that address.',
+    })
+  }
+
+  if (ctx.path === '/sign-in/email' && !found?.user) {
+    throw APIError.from('NOT_FOUND', {
+      code: ACCOUNT_NOT_FOUND,
+      message: 'No account has that address.',
+    })
+  }
+})
 
 function create() {
   return betterAuth({
@@ -214,6 +263,8 @@ function create() {
         '/send-verification-email': { window: 60, max: 5 },
       },
     },
+
+    hooks: { before: identifyTheFailure },
 
     /** Writes the Set-Cookie headers a server action returns. Must come last. */
     plugins: [nextCookies()],

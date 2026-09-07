@@ -1,45 +1,75 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Button, Field } from '@/components/editor/fields'
 import { authClient } from '@/lib/auth/client'
-import { emailSchema } from '@/lib/auth/identity'
+import { ACCOUNT_NOT_FOUND } from '@/lib/auth/codes'
 import { FormError } from './shell'
 
 /**
  * Signing in.
  *
- * The password is only length-checked on the way in, deliberately: applying the
- * registration rules here would tell somebody with an older password that
- * theirs no longer qualifies, before they have proved it is theirs.
- */
-const schema = z.object({ email: emailSchema, password: z.string().min(1) })
-
-type Values = z.input<typeof schema>
-
-/**
- * One message for every way this fails.
+ * Three ways this fails and three different answers, each carrying the thing to
+ * do next. What that gives up, and why it was given up, is in
+ * `identifyTheFailure` in `src/lib/auth/server.ts`.
  *
- * Wrong password, no such address, unverified address: all the same sentence.
- * Any wording that separates them turns the form into a membership oracle, and
- * the second half is what a person needs whichever it was.
+ * No rules are applied to what is typed here. Holding a sign-in form to the
+ * registration rules tells somebody with an older password that theirs no
+ * longer qualifies, before they have proved it is theirs.
  */
-const REFUSED =
-  'That email and password do not match an account with a confirmed address. If you have just registered, follow the link in your email first.'
+
+interface Values {
+  email: string
+  password: string
+}
+
+function refusal(code: string | undefined): ReactNode {
+  if (code === ACCOUNT_NOT_FOUND) {
+    return (
+      <>
+        No account has that address.{' '}
+        <Link href="/sign-up" className="border-b border-current pb-0.5">
+          Create one
+        </Link>
+        .
+      </>
+    )
+  }
+
+  if (code === 'EMAIL_NOT_VERIFIED') {
+    return (
+      <>
+        Confirm your address before signing in. The link was emailed when you registered.{' '}
+        <Link href="/resend-verification" className="border-b border-current pb-0.5">
+          Send it again
+        </Link>
+        .
+      </>
+    )
+  }
+
+  return (
+    <>
+      That password is not right.{' '}
+      <Link href="/forgot-password" className="border-b border-current pb-0.5">
+        Reset it
+      </Link>
+      .
+    </>
+  )
+}
 
 export function SignInForm() {
   const router = useRouter()
-  const [failure, setFailure] = useState<string | null>(null)
+  const [failure, setFailure] = useState<ReactNode>(null)
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<Values>({ resolver: zodResolver(schema), mode: 'onBlur' })
+  } = useForm<Values>({ defaultValues: { email: '', password: '' } })
 
   return (
     <form
@@ -52,7 +82,7 @@ export function SignInForm() {
           password: values.password,
         })
         if (error) {
-          setFailure(REFUSED)
+          setFailure(refusal(error.code))
           return
         }
         router.push('/editor')
@@ -64,29 +94,17 @@ export function SignInForm() {
         type="email"
         autoComplete="email"
         error={errors.email?.message}
-        {...register('email')}
+        {...register('email', { required: 'Enter your email.' })}
       />
       <Field
         label="Password"
         type="password"
         autoComplete="current-password"
         error={errors.password?.message}
-        {...register('password')}
+        {...register('password', { required: 'Enter your password.' })}
       />
 
       <FormError message={failure} />
-
-      {/* Only once they have been refused. This is where somebody whose
-          confirmation email never arrived actually ends up, and until now the
-          message told them to follow a link they never received. */}
-      {failure && (
-        <p className="text-muted text-small">
-          Never got the confirmation email?{' '}
-          <Link href="/resend-verification" className="text-accent border-b border-current pb-0.5">
-            Send it again
-          </Link>
-        </p>
-      )}
 
       <div className="flex items-center gap-4">
         <Button type="submit" variant="primary" disabled={isSubmitting}>

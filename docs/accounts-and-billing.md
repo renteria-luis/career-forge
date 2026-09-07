@@ -144,9 +144,28 @@ already uses, and hands it over in a header of its own.
 Per-account-identifier limits are not built yet. They matter once there is
 something worth farming, which is stage 3.
 
-**Account enumeration.** Login failures, password resets and registration
-collisions return the same response and take the same time whether or not the
-address exists. Otherwise the login form is a membership oracle.
+**Account enumeration.** Password resets and verification resends return the
+same response, and take the same time, whether or not the address exists.
+
+**Signing in and registering deliberately do not, and this is a reversal.** The
+library makes them indistinguishable by default — one code for an unknown
+address and a wrong password, and a registration for an existing address
+answered exactly like a new one, hashed against a fake user so even the timing
+matches. `identifyTheFailure` in `src/lib/auth/server.ts` undoes that on those
+two paths.
+
+What it costs, stated plainly: anyone can now ask this app whether a given
+address has an account, and on a resume tool that question means "is this
+person job hunting". What it buys is the person at the keyboard knowing which
+of registering, resetting or retyping is the thing to do next, instead of
+reading "that email and password do not match" and guessing. That was judged
+the worse failure for this product, by the person whose product it is.
+
+What is unchanged: an address is still confirmed before any session exists,
+attempts are still capped at ten a minute, and a wrong password still costs a
+full Argon2id verify. Membership became askable; an account did not become
+easier to break into. Revisit this if the app ever holds something whose
+membership is worth hiding.
 
 **Email verification.** Required before AI generation is reachable. Unverified
 accounts may exist; they may not spend.

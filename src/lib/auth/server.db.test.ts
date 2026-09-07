@@ -114,20 +114,20 @@ describe('registration', () => {
     expect(rows).toHaveLength(0)
   })
 
-  it('answers a taken address the same way as a free one', async () => {
-    // The plan's anti-enumeration rule: a registration form that says "already
-    // registered" is a way to ask whether someone has an account here.
-    const taken = await auth().api.signUpEmail({
-      body: { name: 'Not Ada', email: 'ada@example.com', password: PASSWORD },
-    })
-    const free = await auth().api.signUpEmail({
-      body: { name: 'Grace', email: 'grace@example.com', password: PASSWORD },
-    })
+  it('refuses a taken address by name, and leaves the first account alone', async () => {
+    /**
+     * A deliberate reversal of what the library does by default, which is to
+     * answer a duplicate exactly like a new registration. What that trades away
+     * is written down in `identifyTheFailure` and in
+     * `docs/accounts-and-billing.md`: this app can now be asked whether an
+     * address has an account here.
+     */
+    await expect(
+      auth().api.signUpEmail({
+        body: { name: 'Not Ada', email: 'ada@example.com', password: PASSWORD },
+      }),
+    ).rejects.toThrow(/already an account/)
 
-    expect(Object.keys(taken).sort()).toEqual(Object.keys(free).sort())
-    expect(taken.user.email).toBe('ada@example.com')
-
-    // And the second attempt did not overwrite the first account.
     const rows = await db()
       .select()
       .from(schema.user)
@@ -135,9 +135,37 @@ describe('registration', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.name).toBe('Ada')
   })
+
+  it('folds case, so one person cannot hold two accounts by accident', async () => {
+    await expect(
+      auth().api.signUpEmail({
+        body: { name: 'Shouting Ada', email: 'ADA@Example.com', password: PASSWORD },
+      }),
+    ).rejects.toThrow(/already an account/)
+  })
+
+  it('registers an address nobody has', async () => {
+    await auth().api.signUpEmail({
+      body: { name: 'Grace', email: 'grace@example.com', password: PASSWORD },
+    })
+
+    const rows = await db()
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.email, 'grace@example.com'))
+    expect(rows).toHaveLength(1)
+  })
 })
 
 describe('signing in', () => {
+  it('says an address has no account, rather than blaming the password', async () => {
+    await expect(
+      auth().api.signInEmail({
+        body: { email: 'nobody-here@example.com', password: PASSWORD },
+      }),
+    ).rejects.toThrow(/No account has that address/)
+  })
+
   it('refuses an unverified address', async () => {
     await expect(
       auth().api.signInEmail({
