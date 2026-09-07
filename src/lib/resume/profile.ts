@@ -38,8 +38,11 @@ export const partialDate = z
  * input as unknown and drags that into every inferred type. The trailing
  * .optional() is what makes the key itself optional in the inferred type, so
  * callers can build a partial profile without spelling out every absent field.
+ *
+ * Exported because `brief.ts` holds fields typed into the same forms and needs
+ * them to behave the same way. One definition of what an empty input means.
  */
-const blank = z
+export const blank = z
   .string()
   .optional()
   .transform((value) => {
@@ -58,7 +61,7 @@ const email = () => blank.pipe(z.email().optional()).optional()
  *
  * The scheme is stripped again for display; see the render model.
  */
-const url = () =>
+export const url = () =>
   blank
     .transform((value) => {
       if (!value) return value

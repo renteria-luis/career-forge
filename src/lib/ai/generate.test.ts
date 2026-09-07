@@ -1,0 +1,254 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { sampleProfile } from '@/lib/resume/fixtures'
+import type { Profile } from '@/lib/resume/profile'
+import { generateFields, resetGenerationState } from './generate'
+import type { ModelClient, ModelRequest, ModelResult } from './model'
+import type { GenerationTask } from './tasks'
+
+/**
+ * The seam, against a fake transport.
+ *
+ * Every rule the seam exists to enforce is asserted here, because the seam is
+ * the only thing enforcing them: a rule that lives in a prompt is a suggestion,
+ * and a rule that lives in a route is one somebody adds a second route past.
+ */
+
+const verified = { id: 'acct_1', emailVerified: true }
+const usage = { input: 900, output: 120, thinking: 40 }
+
+/** A transport that answers with `text` and remembers what it was asked. */
+function replying(text: string) {
+  const requests: ModelRequest[] = []
+  const client: ModelClient = {
+    async send(request) {
+      requests.push(request)
+      return { ok: true, reply: { text, stopReason: 'end_turn', usage } }
+    },
+  }
+  return { client, requests }
+}
+
+function failing(result: ModelResult) {
+  let calls = 0
+  const client: ModelClient = {
+    async send() {
+      calls += 1
+      return result
+    },
+  }
+  return { client, calls: () => calls }
+}
+
+/** A transport that never answers, so a call can be left in flight. */
+function hanging() {
+  const client: ModelClient = {
+    send: () => new Promise<ModelResult>(() => {}),
+  }
+  return client
+}
+
+const summaryTask: GenerationTask = { kind: 'summary' }
+const highlightsTask: GenerationTask = { kind: 'highlights', section: 'work', index: 0 }
+
+let info: ReturnType<typeof vi.spyOn>
+
+beforeEach(() => {
+  resetGenerationState()
+  info = vi.spyOn(console, 'info').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('an account has to be confirmed before it can spend', () => {
+  it('refuses an unverified account without asking the model', async () => {
+    const { client, calls } = failing({ ok: false, failure: 'unavailable' })
+    const result = await generateFields(
+      { profile: sampleProfile, task: summaryTask },
+      { id: 'acct_2', emailVerified: false },
+      { client },
+    )
+
+    expect(result).toEqual({ ok: false, failure: 'unverified' })
+    expect(calls()).toBe(0)
+  })
+
+  it('says the feature is off when no key is configured', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
+    const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
+      client: null,
+    })
+
+    expect(result).toEqual({ ok: false, failure: 'not-configured' })
+    vi.unstubAllEnvs()
+  })
+})
+
+describe('the reply becomes fields, or it becomes nothing', () => {
+  it('returns a summary the profile schema accepts, trimmed', async () => {
+    const { client } = replying(JSON.stringify({ summary: '  Ranking engineer.  ' }))
+    const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
+      client,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      fields: { kind: 'summary', summary: 'Ranking engineer.' },
+      usage,
+    })
+  })
+
+  it('returns highlights, trimmed, with the blanks dropped', async () => {
+    const { client } = replying(
+      JSON.stringify({ highlights: ['  Cut latency to 45ms. ', '   ', 'Owned the rotation.'] }),
+    )
+    const result = await generateFields(
+      { profile: sampleProfile, task: highlightsTask },
+      verified,
+      { client },
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      fields: {
+        kind: 'highlights',
+        section: 'work',
+        index: 0,
+        highlights: ['Cut latency to 45ms.', 'Owned the rotation.'],
+      },
+      usage,
+    })
+  })
+
+  it.each([
+    ['text that is not JSON', 'I would be happy to help with that!'],
+    ['the wrong shape', JSON.stringify({ highlights: ['a'] })],
+    ['a summary that is blank', JSON.stringify({ summary: '   ' })],
+    ['a summary that is not a string', JSON.stringify({ summary: 42 })],
+  ])('refuses %s rather than storing it', async (_name, text) => {
+    const { client } = replying(text)
+    const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
+      client,
+    })
+
+    expect(result).toMatchObject({ ok: false, failure: 'invalid-output' })
+  })
+
+  it('refuses highlights that are all blank', async () => {
+    const { client } = replying(JSON.stringify({ highlights: ['', '  '] }))
+    const result = await generateFields(
+      { profile: sampleProfile, task: highlightsTask },
+      verified,
+      { client },
+    )
+
+    expect(result).toMatchObject({ ok: false, failure: 'invalid-output' })
+  })
+})
+
+describe('a task has to point at something', () => {
+  it('refuses an entry the profile does not have, without asking the model', async () => {
+    const { client, calls } = failing({ ok: false, failure: 'unavailable' })
+    const result = await generateFields(
+      { profile: sampleProfile, task: { kind: 'highlights', section: 'work', index: 40 } },
+      verified,
+      { client },
+    )
+
+    expect(result).toEqual({ ok: false, failure: 'no-entry' })
+    expect(calls()).toBe(0)
+  })
+})
+
+describe('what the transport says is passed on, not interpreted', () => {
+  it('reports a refusal as a refusal', async () => {
+    const { client } = failing({ ok: false, failure: 'refused' })
+    const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
+      client,
+    })
+
+    expect(result).toEqual({ ok: false, failure: 'refused' })
+  })
+
+  it('carries a retry-after through', async () => {
+    const { client } = failing({ ok: false, failure: 'unavailable', retryAfterSeconds: 30 })
+    const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
+      client,
+    })
+
+    expect(result).toEqual({ ok: false, failure: 'unavailable', retryAfterSeconds: 30 })
+  })
+})
+
+describe('one account cannot spend the balance in an afternoon', () => {
+  it('refuses past its allowance and says how long to wait', async () => {
+    const { client } = replying(JSON.stringify({ summary: 'A summary.' }))
+    const ask = () =>
+      generateFields({ profile: sampleProfile, task: summaryTask }, verified, { client })
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      expect((await ask()).ok).toBe(true)
+    }
+
+    const refused = await ask()
+    expect(refused.ok).toBe(false)
+    expect(refused).toMatchObject({ failure: 'rate-limited' })
+    expect(refused.ok === false && refused.retryAfterSeconds).toBeGreaterThan(0)
+  })
+
+  it('leaves a second account untouched', async () => {
+    const { client } = replying(JSON.stringify({ summary: 'A summary.' }))
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      await generateFields({ profile: sampleProfile, task: summaryTask }, verified, { client })
+    }
+
+    const other = await generateFields(
+      { profile: sampleProfile, task: summaryTask },
+      {
+        id: 'acct_other',
+        emailVerified: true,
+      },
+      { client },
+    )
+    expect(other.ok).toBe(true)
+  })
+})
+
+describe('streams cannot take every slot the preview needs', () => {
+  it('refuses the fifth concurrent generation', async () => {
+    const client = hanging()
+    const accounts = ['a', 'b', 'c', 'd'].map((id) => ({ id, emailVerified: true }))
+    const inFlight = accounts.map((account) =>
+      generateFields({ profile: sampleProfile, task: summaryTask }, account, { client }),
+    )
+
+    const fifth = await generateFields(
+      { profile: sampleProfile, task: summaryTask },
+      { id: 'e', emailVerified: true },
+      { client },
+    )
+
+    expect(fifth).toEqual({ ok: false, failure: 'busy' })
+    expect(inFlight).toHaveLength(4)
+  })
+})
+
+describe('the log says what happened and nothing about who it happened to', () => {
+  it('records ids, counts and the outcome only', async () => {
+    const secret: Profile = {
+      basics: { name: 'Ana Ruiz Peña', summary: 'A sentence nobody else should read.' },
+    }
+    const { client } = replying(JSON.stringify({ summary: 'A generated summary.' }))
+    await generateFields({ profile: secret, task: summaryTask }, verified, { client })
+
+    const line = info.mock.calls.at(-1)?.[0] as string
+    expect(line).toContain('account=acct_1')
+    expect(line).toContain('task=summary')
+    expect(line).toContain('outcome=ok')
+    expect(line).toContain(`in=${usage.input}`)
+    expect(line).not.toContain('Ana')
+    expect(line).not.toContain('nobody else should read')
+    expect(line).not.toContain('A generated summary')
+  })
+})

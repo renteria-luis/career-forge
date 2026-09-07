@@ -12,6 +12,7 @@ import {
 import { formBlockTitle, formBlocks, type FormBlockId } from '@/lib/editor/form-blocks'
 import type { DocumentSection } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
+import { DraftWithAi } from './draft-with-ai'
 import { EntryCard, FormSection } from './entry-card'
 import { Button, Field, Select, TextArea } from './fields'
 import { toHandle, toUrl } from '@/lib/editor/profile-links'
@@ -310,6 +311,11 @@ export const ProfileForm = memo(function ProfileForm({
                     label="What you did"
                     placeholder={'Cut retrieval latency from 240ms to 45ms.\nLed a team of four.'}
                   />
+                  <DraftWithAi
+                    form={form}
+                    task={{ kind: 'highlights', section: 'work', index }}
+                    label="Draft the bullets"
+                  />
                 </EntryCard>
               ))}
             </ul>
@@ -389,6 +395,11 @@ export const ProfileForm = memo(function ProfileForm({
                     placeholder={
                       'Shipped the ranking model behind the search box.\nCut build times by half.'
                     }
+                  />
+                  <DraftWithAi
+                    form={form}
+                    task={{ kind: 'highlights', section: 'projects', index }}
+                    label="Draft the bullets"
                   />
                 </EntryCard>
               ))}
@@ -635,11 +646,18 @@ export const ProfileForm = memo(function ProfileForm({
         />
         <ProfileLinks form={form} />
         {has('summary') && (
-          <TextArea
-            label="Summary"
-            placeholder={'Two or three sentences. What you do, and the evidence for it.'}
-            {...register('basics.summary')}
-          />
+          <>
+            <TextArea
+              label="Summary"
+              placeholder={'Two or three sentences. What you do, and the evidence for it.'}
+              {...register('basics.summary')}
+            />
+            {/* Placed after the field it writes, and only ever offering. The
+                summary is the one section drawn from the whole profile, which
+                is what makes it worth drafting and what makes it worth reading
+                back before it is used. */}
+            <DraftWithAi form={form} task={{ kind: 'summary' }} label="Draft a summary" />
+          </>
         )}
       </FormSection>
 

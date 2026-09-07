@@ -96,3 +96,33 @@ test.describe('/api/import', () => {
     expect(response.status()).toBe(400)
   })
 })
+
+test.describe('/api/generate', () => {
+  /**
+   * The endpoint that spends money, asked for by somebody with no account.
+   *
+   * This is the check worth having end to end: every other guard sits behind
+   * the session, so if this one ever answers with anything but a refusal, none
+   * of the rest is reached.
+   */
+  test('refuses a caller with no session', async ({ request }) => {
+    const response = await request.post('/api/generate', {
+      data: {
+        profile: { basics: { name: 'Ana Ruiz' } },
+        task: { kind: 'summary' },
+      },
+    })
+    expect(response.status()).toBe(401)
+    expect(response.headers()['content-type']).toContain('application/json')
+  })
+
+  test('refuses a body it cannot parse before looking at anything else', async ({ request }) => {
+    const response = await request.post('/api/generate', {
+      headers: { 'content-type': 'application/json' },
+      data: Buffer.from('{ not json'),
+    })
+    // Still the session refusal: an unknown caller never gets as far as having
+    // their body read, which is the order this route is written in.
+    expect(response.status()).toBe(401)
+  })
+})

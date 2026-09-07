@@ -29,6 +29,7 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.124.0",
     "@hookform/resolvers": "5.7.1",
     "@myriaddreamin/typst-ts-node-compiler": "0.7.0",
     "@node-rs/argon2": "2.2.0",

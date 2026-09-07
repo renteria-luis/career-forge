@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server'
 import { type RateLimiter, callerKey, createRateLimiter } from './rate-limit'
 
 /**
- * The allowances the two public endpoints run under, and why each number.
+ * The allowances the endpoints that do real work run under, and why each
+ * number.
  *
- * Both are sized from what the app itself produces, so the ceiling a person
- * meets is one they had to work at. Neither is a guess about attackers; it is
- * the shape of ordinary use with room above it.
+ * All are sized from what the app itself produces, so the ceiling a person
+ * meets is one they had to work at. None is a guess about attackers; it is the
+ * shape of ordinary use with room above it. Generation is the odd one out and
+ * is marked as such: it is reachable only with a confirmed account, and what it
+ * spends is money rather than CPU.
  */
 
 /**
@@ -26,6 +29,17 @@ const COMPILE_PER_CALLER = { capacity: 60, refillPerSecond: 6 }
 const IMPORT_PER_CALLER = { capacity: 10, refillPerSecond: 0.5 }
 
 /**
+ * Generation is the one endpoint whose cost is money rather than CPU, and this
+ * is the bucket that keys on an address rather than an account.
+ *
+ * The account's own allowance, in `src/lib/ai/generate.ts`, is the one that
+ * matters for a person; this one exists because an address can hold several
+ * accounts and the two limits fail differently. Ten at once and six a minute is
+ * above anything a person writing a resume produces.
+ */
+const GENERATE_PER_CALLER = { capacity: 10, refillPerSecond: 0.1 }
+
+/**
  * The global backstops, which no caller can shed by rewriting a header.
  *
  * Both are set from what one instance costs to serve rather than from a guess
@@ -41,6 +55,17 @@ const IMPORT_PER_CALLER = { capacity: 10, refillPerSecond: 0.5 }
  */
 const COMPILE_GLOBAL = { capacity: 600, refillPerSecond: 120 }
 const IMPORT_GLOBAL = { capacity: 120, refillPerSecond: 30 }
+
+/**
+ * The global backstop on generation, which is sized in money rather than in
+ * CPU. Twelve at once and six a minute is roughly a quarter of a dollar a
+ * minute at the measured cost of a generation.
+ *
+ * It is not what makes a large bill impossible — the balance on the provider
+ * workspace is, and it stops rather than warns. This is what stops a crowd, or
+ * a loop, from reaching it in an afternoon.
+ */
+const GENERATE_GLOBAL = { capacity: 12, refillPerSecond: 0.1 }
 
 /** One key, so the bucket is the whole service rather than any one caller. */
 const EVERYONE = 'all'
@@ -60,6 +85,8 @@ function limiters(): Record<string, RateLimiter> {
     compileGlobal: createRateLimiter({ ...COMPILE_GLOBAL, maxKeys: 1 }),
     importCaller: createRateLimiter(IMPORT_PER_CALLER),
     importGlobal: createRateLimiter({ ...IMPORT_GLOBAL, maxKeys: 1 }),
+    generateCaller: createRateLimiter(GENERATE_PER_CALLER),
+    generateGlobal: createRateLimiter({ ...GENERATE_GLOBAL, maxKeys: 1 }),
   }
   return globalForLimits.__rateLimiters
 }
@@ -76,7 +103,7 @@ function limiters(): Record<string, RateLimiter> {
  * is. It is the same body either way, because a caller learning that the global
  * ceiling is the one in reach has learned how to keep it there.
  */
-export function refuseIfOverLimit(request: Request, endpoint: 'compile' | 'import') {
+export function refuseIfOverLimit(request: Request, endpoint: 'compile' | 'import' | 'generate') {
   const scope = limiters()
   const caller = scope[`${endpoint}Caller`]
   const global = scope[`${endpoint}Global`]

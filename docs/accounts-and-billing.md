@@ -274,10 +274,22 @@ with a reason. A single mutable `credits` column cannot answer "why is this
 zero" and cannot be audited after a bug.
 
 **Per-request bounds, before the call.** `max_tokens` capped, input sizes
-validated at the Zod boundary. The measured cost of one generation is roughly
-$0.04 at Sonnet 5 pricing ($2/MTok in, $10/MTok out) for a request of about 6k
-input and 2.5k output tokens. Log tokens and cost as numbers against an account
+validated at the Zod boundary. Log tokens and cost as numbers against an account
 id — never the prompt, never the completion.
+
+The $0.04 that stood here was an estimate for a 6k-input, 2.5k-output request at
+Sonnet 5 pricing, and both halves were wrong for what was built. Measured
+against the real API on `sampleProfile`, at Opus 5's $5/MTok in and $25/MTok
+out:
+
+| Task    | Input tokens | Output tokens | Cost   |
+| ------- | ------------ | ------------- | ------ |
+| Summary | 918          | 201           | $0.010 |
+| Bullets | 1,098        | 39            | $0.006 |
+
+A generation is about a cent, so a $5 balance is several hundred of them. The
+number that matters for a bill is not the per-request one anyway: it is that the
+balance is a hard stop, and the request is bounded before it is sent.
 
 **Streaming.** Generation streams. A non-streaming request with a large
 `max_tokens` risks idle-connection timeouts, and the SDK raises an error for
@@ -316,14 +328,35 @@ rewrite.
 5. Credits, ledger, per-account limits, phone verification if warranted
 6. Payments
 
-Steps 1 through 4 are stage 2 and are the current target. Nothing in them
-becomes wasted work at step 5.
+Steps 1 through 4 are stage 2 and are done. Nothing in them becomes wasted work
+at step 5: the seam is where a balance check and a ledger row go, and there is
+one of it.
 
-Step 3 is built and runs against a real Postgres in the test suite. What it
-still needs before it is reachable by anyone is step 2 — a Neon project — plus
-an email provider and the two secrets, all of which are named in `.env.example`.
-Nothing about it has been exercised against a hosted database or a real mail
-provider yet, and neither has the container: `@node-rs/argon2` is a native
-binding, like the Typst compiler, and this project has twice been caught by
-something that worked locally and not in the image. Build the image and check
-before believing it.
+Steps 2 and 3 are done and live. The Neon project exists in the compute
+region, the migrations are applied, and an address has been registered,
+confirmed through a real Resend delivery and signed in against the deployed
+service. The container builds and serves the account system, which was the one
+thing this document said not to believe until it had been checked.
+
+Step 4 has its seam. `src/lib/ai/generate.ts` is the one function that calls a
+model, `/api/generate` is behind a confirmed address, and both are covered by
+tests that run without a key. `@anthropic-ai/sdk` 0.124.0 is in the tree; its
+only peer requirement is Zod `^3.25 || ^4`, which the installed 4.4.3 satisfies
+without a second copy.
+
+The editor reaches it from beside the summary and beside each set of bullets.
+What comes back is shown as a proposal and written into the form only when the
+person presses Use this — the profile is the truth the rest of the pipeline
+depends on, and a resume goes out under the name of the person it describes.
+
+Drafting is also the first path here that sends resume text off the machine at
+all: the ATS check runs in the browser and compiling stores nothing. That is
+said to the user once per browser, before anything leaves it, rather than left
+to a policy page.
+
+Two things about the model are decisions rather than defaults. It is Opus 5 at
+low effort, written in the file rather than read from the environment so that
+changing it is a diff somebody reviews. And the provider was chosen partly
+because its commercial terms say it may not train on what is sent — resume text
+leaving the machine at all is new to this application, and it is the first thing
+the UI has to say.

@@ -1,5 +1,6 @@
 'use client'
 
+import { careerNotes, jobTarget, type CareerNotes, type JobTarget } from '@/lib/resume/brief'
 import { resumeDocument, type ResumeDocument } from '@/lib/resume/document'
 import { profile as profileSchema, type Profile } from '@/lib/resume/profile'
 
@@ -20,6 +21,10 @@ const KEY = 'career-forge:draft:v1'
 export interface Draft {
   profile: Profile
   document: ResumeDocument
+  /** Raw material and voice. Never drawn; see `brief.ts`. */
+  notes: CareerNotes
+  /** The job being aimed at. */
+  target: JobTarget
 }
 
 export function loadDraft(): Draft | undefined {
@@ -30,12 +35,33 @@ export function loadDraft(): Draft | undefined {
     const parsed = JSON.parse(raw) as unknown
     if (typeof parsed !== 'object' || parsed === null) return undefined
 
-    const { profile, document } = parsed as { profile?: unknown; document?: unknown }
+    const { profile, document, notes, target } = parsed as {
+      profile?: unknown
+      document?: unknown
+      notes?: unknown
+      target?: unknown
+    }
     const profileResult = profileSchema.safeParse(profile)
     const documentResult = resumeDocument.safeParse(document)
     if (!profileResult.success || !documentResult.success) return undefined
 
-    return { profile: profileResult.data, document: documentResult.data }
+    /**
+     * The brief is recovered separately, and its absence is not a failure.
+     *
+     * Every draft written before these two existed has neither, and every one
+     * of those is somebody's resume. Refusing the whole draft over a field that
+     * was not invented yet would drop the resume and save an empty form over
+     * the top of it a moment later.
+     */
+    const notesResult = careerNotes.safeParse(notes)
+    const targetResult = jobTarget.safeParse(target)
+
+    return {
+      profile: profileResult.data,
+      document: documentResult.data,
+      notes: notesResult.success ? notesResult.data : {},
+      target: targetResult.success ? targetResult.data : {},
+    }
   } catch {
     // Storage can be unavailable or full. A lost draft is worse than a crash
     // only in the sense that a crash is worse still.

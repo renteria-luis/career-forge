@@ -1,0 +1,104 @@
+'use client'
+
+import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
+import { MAX_NOTES, MAX_POSTING, MAX_VOICE } from '@/lib/resume/brief'
+import { FormSection } from './entry-card'
+import { Field, TextArea } from './fields'
+
+/**
+ * The pane that never reaches the PDF.
+ *
+ * Everything here is material for drafting: the advert a resume is being aimed
+ * at, and the things about a person that a resume has no line for. The page
+ * says so at the top, because a form that looks like every other form and then
+ * changes nothing in the preview is a form people assume is broken.
+ */
+
+/** How full a bounded field is, once it is worth knowing. */
+function Fill({ value, max }: { value: string | undefined; max: number }) {
+  const used = value?.length ?? 0
+  // Silent until it matters. A counter under an empty box is noise.
+  if (used < max * 0.6) return null
+  return (
+    <p className={`text-micro font-mono ${used >= max ? 'text-flag' : 'text-muted'}`}>
+      {used.toLocaleString()} / {max.toLocaleString()}
+    </p>
+  )
+}
+
+export function BriefForm({
+  notes,
+  target,
+  onNotesChange,
+  onTargetChange,
+}: {
+  notes: CareerNotes
+  target: JobTarget
+  onNotesChange: (notes: CareerNotes) => void
+  onTargetChange: (target: JobTarget) => void
+}) {
+  const setTarget = (patch: Partial<JobTarget>) => onTargetChange({ ...target, ...patch })
+  const setNotes = (patch: Partial<CareerNotes>) => onNotesChange({ ...notes, ...patch })
+
+  return (
+    <div className="flex flex-col">
+      <p className="text-muted text-small border-hairline border-b pb-4">
+        None of this appears in your PDF. It is what the drafting reads: the job you are aiming at,
+        and the things about you that a resume has no line for.
+      </p>
+
+      <FormSection title="The job">
+        <div className="grid gap-3 @md:grid-cols-2">
+          <Field
+            label="Company"
+            placeholder="Nomad Analytics"
+            value={target.company ?? ''}
+            onChange={(event) => setTarget({ company: event.target.value })}
+          />
+          <Field
+            label="Role"
+            placeholder="Senior ML Engineer"
+            value={target.role ?? ''}
+            onChange={(event) => setTarget({ role: event.target.value })}
+          />
+        </div>
+        <Field
+          label="Link to the posting"
+          placeholder="company.com/careers/123"
+          value={target.url ?? ''}
+          onChange={(event) => setTarget({ url: event.target.value })}
+        />
+        <TextArea
+          label="The posting"
+          hint="Paste the whole advert. What it asks for is what a tailored resume answers."
+          rows={12}
+          value={target.posting ?? ''}
+          onChange={(event) => setTarget({ posting: event.target.value.slice(0, MAX_POSTING) })}
+        />
+        <Fill value={target.posting} max={MAX_POSTING} />
+      </FormSection>
+
+      <FormSection title="Raw material">
+        <TextArea
+          label="Everything you have not put on the resume yet"
+          hint="Numbers, what a project actually did, what went wrong and how it got fixed. Untidy is fine. Drafting can only phrase facts it has been given, so this is what decides whether a draft has anything to say."
+          rows={12}
+          value={notes.notes ?? ''}
+          onChange={(event) => setNotes({ notes: event.target.value.slice(0, MAX_NOTES) })}
+        />
+        <Fill value={notes.notes} max={MAX_NOTES} />
+      </FormSection>
+
+      <FormSection title="Your voice">
+        <TextArea
+          label="How you write, and what you care about"
+          hint="A cover letter that sounds like you needs somewhere to learn that from, and a work history is not it. Plain or formal, what drew you to the field, what you will not claim."
+          rows={6}
+          value={notes.voice ?? ''}
+          onChange={(event) => setNotes({ voice: event.target.value.slice(0, MAX_VOICE) })}
+        />
+        <Fill value={notes.voice} max={MAX_VOICE} />
+      </FormSection>
+    </div>
+  )
+}

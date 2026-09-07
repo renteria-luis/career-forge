@@ -14,6 +14,7 @@ export function ConfirmDialog({
   title,
   body,
   confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
 }: {
@@ -21,6 +22,8 @@ export function ConfirmDialog({
   title: string
   body: string
   confirmLabel: string
+  /** What refusing is called. It is never "cancel" for its own sake. */
+  cancelLabel: string
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -45,7 +48,7 @@ export function ConfirmDialog({
       <h2 className="font-display text-title">{title}</h2>
       <p className="text-muted text-small mt-2">{body}</p>
       <div className="mt-5 flex justify-end gap-2">
-        <Button onClick={onCancel}>Keep it</Button>
+        <Button onClick={onCancel}>{cancelLabel}</Button>
         <Button variant="primary" onClick={onConfirm}>
           {confirmLabel}
         </Button>

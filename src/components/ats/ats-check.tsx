@@ -76,6 +76,10 @@ export function AtsCheck() {
             maxPages: Math.min(Math.max(analysis.report.pages, 1), 10),
           },
         },
+        // An import brings a resume, not a job to aim it at. Both are empty and
+        // the editor's own pane is where they get filled in.
+        notes: {},
+        target: {},
       }),
     )
     router.push('/editor')

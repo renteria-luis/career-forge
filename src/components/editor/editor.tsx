@@ -12,10 +12,12 @@ import { moveEntry, moveSection } from '@/lib/editor/rearrange'
 import { fromPortableJson, toPortableJson } from '@/lib/editor/portable'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { emptyDocument, emptyProfile, sectionsForProfile, toFormValues } from '@/lib/editor/starter'
+import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
 import type { ResumeDocument } from '@/lib/resume/document'
 import { PAPERS, type PaperId } from '@/lib/resume/typography'
 import { profile as profileSchema, type Profile } from '@/lib/resume/profile'
 import type { ParseReport } from '@/lib/parse/parse'
+import { BriefForm } from './brief-form'
 import { DocumentControls } from './document-controls'
 import { ConfirmDialog } from './confirm-dialog'
 import { Button, Segmented } from './fields'
@@ -25,7 +27,8 @@ import type { RearrangeMode } from './rearrange-overlay'
 import { ProfileForm } from './profile-form'
 import { SectionIndex } from './section-index'
 
-type Pane = 'content' | 'layout'
+const PANES = ['content', 'brief', 'layout'] as const
+type Pane = (typeof PANES)[number]
 
 export function Editor() {
   // Read once, during the first render. This component is loaded client-only,
@@ -40,6 +43,8 @@ export function Editor() {
   const [document, setDocument] = useState<ResumeDocument>(
     () => restored?.document ?? emptyDocument(),
   )
+  const [notes, setNotes] = useState<CareerNotes>(() => restored?.notes ?? {})
+  const [target, setTarget] = useState<JobTarget>(() => restored?.target ?? {})
   const [pane, setPane] = useState<Pane>('content')
   const [showPreview, setShowPreview] = useState(false)
   const [rearrange, setRearrange] = useState<RearrangeMode | null>(null)
@@ -82,15 +87,20 @@ export function Editor() {
   const activeBlock = useActiveBlock(formScrollRef, pane === 'content' && rearrange === null)
 
   /**
-   * One pass over the resume per keystroke, used three times.
+   * Two strings, and they used to be one.
    *
-   * This string is the compile request body, the draft written to storage, and
-   * the only way to tell that anything changed — react-hook-form returns a new
-   * object every render, so identity says nothing. It was built twice, here and
-   * inside the compile hook, producing two identical strings.
+   * Both are built here rather than inside the hooks that consume them, because
+   * react-hook-form returns a new object every render and a string is the only
+   * way to tell that anything actually changed.
+   *
+   * They were the same string until the brief existed. The brief holds a pasted
+   * job advert and a page of raw notes, which the template never draws — posting
+   * all of it to `/api/compile` on every keystroke would be egress paid for
+   * nothing. Walking the resume twice costs microseconds; that does not.
    */
-  const draft = serializeDraft({ profile: values, document })
-  const compiled = useCompiledPdf(draft)
+  const compileBody = JSON.stringify({ profile: values, document })
+  const draft = serializeDraft({ profile: values, document, notes, target })
+  const compiled = useCompiledPdf(compileBody)
 
   // The form says which block it is on; the compile says where that block was
   // drawn. Neither knows about the other, and this is the whole join.
@@ -319,6 +329,8 @@ export function Editor() {
     clearDraft()
     form.reset(emptyProfile())
     setDocument(emptyDocument())
+    setNotes({})
+    setTarget({})
     setReport(null)
     setImportError(null)
     setRearrange(null)
@@ -470,7 +482,7 @@ export function Editor() {
                   an email address was cut off mid-domain. */}
               <div className="@container min-w-0 flex-1">
                 <div role="tablist" className="border-hairline mb-2 flex gap-1 border-b">
-                  {(['content', 'layout'] as const).map((id) => (
+                  {PANES.map((id) => (
                     <button
                       key={id}
                       role="tab"
@@ -500,9 +512,16 @@ export function Editor() {
                 {/* The tabs above named no panel, so "selected" described a
                     control that pointed at nothing. */}
                 <div role="tabpanel" id="pane-panel" aria-labelledby={`pane-tab-${pane}`}>
-                  {pane === 'content' ? (
-                    <ProfileForm form={form} sections={document.sections} />
-                  ) : (
+                  {pane === 'content' && <ProfileForm form={form} sections={document.sections} />}
+                  {pane === 'brief' && (
+                    <BriefForm
+                      notes={notes}
+                      target={target}
+                      onNotesChange={setNotes}
+                      onTargetChange={setTarget}
+                    />
+                  )}
+                  {pane === 'layout' && (
                     <DocumentControls
                       document={document}
                       onChange={setDocument}
@@ -594,6 +613,7 @@ export function Editor() {
         title="Clear everything?"
         body="Your resume, your layout and the draft saved in this browser are all removed, and the editor goes back to empty. This cannot be undone."
         confirmLabel="Clear everything"
+        cancelLabel="Keep it"
         onConfirm={startOver}
         onCancel={() => setConfirmingClear(false)}
       />

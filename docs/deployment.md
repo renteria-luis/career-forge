@@ -172,14 +172,30 @@ Token buckets, in memory, per instance. That is exact rather than approximate
 because `--max-instances 1` means one instance is the whole service; a second
 instance would need a shared store, and this note is the reminder.
 
-|                | Per caller      | Global           |
-| -------------- | --------------- | ---------------- |
-| `/api/compile` | 60 burst, 6/s   | 600 burst, 120/s |
-| `/api/import`  | 10 burst, 0.5/s | 120 burst, 30/s  |
+|                 | Per caller      | Global           |
+| --------------- | --------------- | ---------------- |
+| `/api/compile`  | 60 burst, 6/s   | 600 burst, 120/s |
+| `/api/import`   | 10 burst, 0.5/s | 120 burst, 30/s  |
+| `/api/generate` | 10 burst, 0.1/s | 12 burst, 0.1/s  |
 
 The account endpoints have their own, per address and per path, held the same
 way: 10 sign-ins a minute, 5 registrations, 5 password resets. A sign-in costs
 a 19 MiB Argon2id verify, which is what makes those numbers worth having.
+
+`/api/generate` is the odd row and is sized in money rather than in CPU. It also
+has a second allowance of its own, per account rather than per address, in
+`src/lib/ai/generate.ts`; the two exist together because one address can hold
+several accounts. Neither is what makes a large bill impossible — the balance on
+the provider workspace is, and it stops rather than warns.
+
+**A generation holds a Cloud Run slot for tens of seconds.** That is the one way
+it interacts with the numbers above: `--concurrency 40` is sized for compiles
+that take 5.7 ms, and a streamed generation occupies a slot for the whole of its
+life. The seam caps concurrent generations at four per instance, which leaves
+thirty-six for the live preview. Memory is not the constraint — a reply is
+capped in the low thousands of tokens, so four in flight is tens of kilobytes
+against the 310 MB plateau — and neither is billed instance time, at roughly 40
+vCPU-seconds a generation against a 180,000-second monthly allowance.
 
 The per-caller figures come from what the app produces: the preview debounces
 at 250 ms, so a tab being typed into cannot exceed four compiles a second.
@@ -230,7 +246,10 @@ which this deployment uses.
 - A shared store for the rate limits, the moment `--max-instances` goes above 1.
   This now covers the account limits too, which are held in the same way and for
   the same reason.
-- A container built and run with the account system in it. `@node-rs/argon2` is
-  a native binding, like the Typst compiler, and its `.node` file is traced into
-  `.next/standalone` — but this project has twice been caught by something that
-  worked locally and not in the image.
+  That list no longer includes the container. The image has been built with the
+  account system in it and is serving it: `@node-rs/argon2` is a native binding,
+  like the Typst compiler, and its `.node` file is traced into `.next/standalone`.
+  One thing did have to be fixed to get there, and it is the shape to remember —
+  `playwright.config.ts` imports from `e2e/`, `e2e/` is not copied into the image,
+  and the build's own TypeScript pass still read the config that was left behind.
+  A file excluded from the image takes its config with it.

@@ -1146,3 +1146,46 @@ test.describe('the editor gets out of its own way', () => {
     await expect(page).toHaveURL('/')
   })
 })
+
+test.describe('the brief is read, not drawn', () => {
+  const MARKER = 'ZZ-POSTING-MARKER-ZZ'
+
+  test('holds the job and the raw material, and keeps them across a reload', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'brief' }).click()
+
+    await expect(page.getByText('None of this appears in your PDF')).toBeVisible()
+
+    await page.getByLabel('Company').fill('Nomad Analytics')
+    await page.getByLabel('The posting', { exact: true }).fill(MARKER)
+    await page
+      .getByLabel('Everything you have not put on the resume yet')
+      .fill('Cut a 240ms query to 45ms.')
+
+    await page.reload()
+    await page.getByRole('tab', { name: 'brief' }).click()
+    await expect(page.getByLabel('Company')).toHaveValue('Nomad Analytics')
+    await expect(page.getByLabel('The posting', { exact: true })).toHaveValue(MARKER)
+    await expect(page.getByLabel('Everything you have not put on the resume yet')).toHaveValue(
+      'Cut a 240ms query to 45ms.',
+    )
+  })
+
+  test('never posts the advert to the compiler', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'brief' }).click()
+    await page.getByLabel('The posting', { exact: true }).fill(MARKER)
+
+    // Typing in the brief compiles nothing, so the resume is what triggers the
+    // request this is watching.
+    const compiled = page.waitForRequest(
+      (request) => request.url().includes('/api/compile') && request.method() === 'POST',
+    )
+    await page.getByRole('tab', { name: 'content' }).click()
+    await page.getByLabel('Full name').fill('Ana Ruiz')
+
+    // A page of pasted advert riding on every keystroke would be egress paid
+    // for something the template does not draw.
+    expect((await compiled).postData()).not.toContain(MARKER)
+  })
+})

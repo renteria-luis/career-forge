@@ -1,6 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises'
-import { expect, test as base, type Page } from '@playwright/test'
-import { E2E_MAIL_DIR } from './environment'
+import { expect } from '@playwright/test'
+import { PASSWORD, address, linkSentTo, messagesSentTo, register, test } from './accounts'
 
 /**
  * Registering, confirming an address, and signing in.
@@ -10,87 +9,13 @@ import { E2E_MAIL_DIR } from './environment'
  * collected, that the link in the email lands somewhere that says what
  * happened, and that the two answers which must not reveal whether an address
  * exists actually read the same.
- */
-
-/**
- * Each test arrives from its own address.
  *
- * Registration is capped at five a minute per caller, which is the right number
- * for a person and the wrong one for a suite running two browser projects side
- * by side against a single server. Without this they share one bucket, and the
- * failure looks like a broken sign-up form rather than a limit doing its job —
- * which is exactly how the first run of this file failed.
- *
- * The header is the one `proxy.ts` reads. A caller cannot set it in production:
- * the load balancer appends, and only the last entry is believed.
+ * The fixtures live in `accounts.ts`, which is also what the drafting spec
+ * needs a confirmed account from.
  */
-// Counted per worker and combined with the worker's own number, because the
-// two browser projects run in separate processes with separate copies of this
-// module — a counter alone hands both of them 203.0.113.1.
-let nextCaller = 0
-// The second argument is named `provide` rather than Playwright's usual `use`:
-// the React hooks lint rule reads a bare `use(...)` as the React one.
-const test = base.extend<{ callerAddress: string }>({
-  callerAddress: async ({}, provide, testInfo) => {
-    nextCaller += 1
-    await provide(`203.0.${100 + testInfo.workerIndex}.${nextCaller}`)
-  },
-  context: async ({ browser, callerAddress }, provide) => {
-    const context = await browser.newContext({
-      extraHTTPHeaders: { 'x-forwarded-for': callerAddress },
-    })
-    await provide(context)
-    await context.close()
-  },
-})
-
-/** Both projects share one database, so an address has to be theirs alone. */
-function address(name: string): string {
-  return `${name}-${test.info().project.name}-${Date.now()}@example.com`
-}
 
 /** Ours, and not Next's empty route announcer, which is also `role="alert"`. */
 const formError = 'p[role="alert"]'
-
-/** Fifteen characters, a digit, and hyphens for symbols. See `PASSWORD_RULES`. */
-const PASSWORD = 'a-long-enough-1'
-
-/** Filling in the registration form, which four tests below have to do. */
-async function register(page: Page, name: string, email: string): Promise<void> {
-  await page.goto('/sign-up')
-  await page.getByLabel('Name').fill(name)
-  await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
-  await page.getByLabel('Repeat password').fill(PASSWORD)
-  await page.getByRole('button', { name: 'Create account' }).click()
-}
-
-/**
- * Every message sent to one address, newest first.
- *
- * Addressed rather than "the most recent file". The two browser projects share
- * one server and one mailbox, so reading the latest message meant one project
- * following the other's verification link and confirming somebody else's
- * account — which is how this was found.
- */
-async function messagesSentTo(email: string): Promise<string[]> {
-  const files = (await readdir(E2E_MAIL_DIR)).sort().reverse()
-  const bodies: string[] = []
-  for (const file of files) {
-    const body = await readFile(`${E2E_MAIL_DIR}/${file}`, 'utf8')
-    if (body.startsWith(`To: ${email}\n`)) bodies.push(body)
-  }
-  return bodies
-}
-
-/** The link in the newest message sent to one address. */
-async function linkSentTo(email: string): Promise<string> {
-  const [newest] = await messagesSentTo(email)
-  if (!newest) throw new Error(`no message was sent to ${email}`)
-  const link = newest.match(/https?:\/\/\S+/)?.[0]
-  if (!link) throw new Error('the message carried no link')
-  return link
-}
 
 test.describe('accounts', () => {
   test('register, confirm the address, then sign in', async ({ page }) => {
