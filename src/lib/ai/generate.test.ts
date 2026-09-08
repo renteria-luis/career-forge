@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sampleProfile } from '@/lib/resume/fixtures'
 import type { Profile } from '@/lib/resume/profile'
-import { generateFields, resetGenerationState } from './generate'
-import type { ModelClient, ModelRequest, ModelResult } from './model'
+import { generateFields, resetGenerationState, routeTo } from './generate'
+import { resetModelClients, type ModelClient, type ModelRequest, type ModelResult } from './model'
 import type { GenerationTask } from './tasks'
 
 /**
@@ -54,6 +54,7 @@ let info: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   resetGenerationState()
+  resetModelClients()
   info = vi.spyOn(console, 'info').mockImplementation(() => {})
 })
 
@@ -76,6 +77,7 @@ describe('an account has to be confirmed before it can spend', () => {
 
   it('says the feature is off when no key is configured', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', '')
+    vi.stubEnv('GEMINI_API_KEY', '')
     const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
       client: null,
     })
@@ -250,5 +252,34 @@ describe('the log says what happened and nothing about who it happened to', () =
     expect(line).not.toContain('Ana')
     expect(line).not.toContain('nobody else should read')
     expect(line).not.toContain('A generated summary')
+  })
+})
+
+describe('which model runs the work', () => {
+  const everywhere = () => true
+  const nowhere = () => false
+
+  it("sends both of today's tasks to the free one when nobody has said otherwise", () => {
+    expect(routeTo(summaryTask, 'auto', everywhere)).toBe('free')
+    expect(routeTo(highlightsTask, 'auto', everywhere)).toBe('free')
+  })
+
+  it('honours an explicit choice', () => {
+    expect(routeTo(summaryTask, 'best', everywhere)).toBe('best')
+    expect(routeTo(summaryTask, 'free', everywhere)).toBe('free')
+  })
+
+  it('refuses rather than substituting a paid model for a free one', () => {
+    expect(routeTo(summaryTask, 'free', (provider) => provider === 'best')).toBeNull()
+    expect(routeTo(summaryTask, 'best', (provider) => provider === 'free')).toBeNull()
+  })
+
+  it('falls back either way when the choice was automatic', () => {
+    expect(routeTo(summaryTask, 'auto', (provider) => provider === 'best')).toBe('best')
+    expect(routeTo(summaryTask, 'auto', (provider) => provider === 'free')).toBe('free')
+  })
+
+  it('has nothing to offer when neither is configured', () => {
+    expect(routeTo(summaryTask, 'auto', nowhere)).toBeNull()
   })
 })

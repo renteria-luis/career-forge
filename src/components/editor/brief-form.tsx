@@ -1,9 +1,10 @@
 'use client'
 
+import type { ModelChoice } from '@/lib/ai/fields'
 import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
 import { MAX_NOTES, MAX_POSTING, MAX_VOICE } from '@/lib/resume/brief'
 import { FormSection } from './entry-card'
-import { Field, TextArea } from './fields'
+import { Field, Segmented, TextArea } from './fields'
 
 /**
  * The pane that never reaches the PDF.
@@ -26,16 +27,26 @@ function Fill({ value, max }: { value: string | undefined; max: number }) {
   )
 }
 
+const CHOICES: { value: ModelChoice; label: string }[] = [
+  { value: 'auto', label: 'Automatic' },
+  { value: 'free', label: 'Free' },
+  { value: 'best', label: 'Best' },
+]
+
 export function BriefForm({
   notes,
   target,
+  choice,
   onNotesChange,
   onTargetChange,
+  onChoiceChange,
 }: {
   notes: CareerNotes
   target: JobTarget
+  choice: ModelChoice
   onNotesChange: (notes: CareerNotes) => void
   onTargetChange: (target: JobTarget) => void
+  onChoiceChange: (choice: ModelChoice) => void
 }) {
   const setTarget = (patch: Partial<JobTarget>) => onTargetChange({ ...target, ...patch })
   const setNotes = (patch: Partial<CareerNotes>) => onNotesChange({ ...notes, ...patch })
@@ -98,6 +109,19 @@ export function BriefForm({
           onChange={(event) => setNotes({ voice: event.target.value.slice(0, MAX_VOICE) })}
         />
         <Fill value={notes.voice} max={MAX_VOICE} />
+      </FormSection>
+
+      <FormSection title="Drafting">
+        <p className="text-muted text-small">
+          Automatic uses the free model where the answer is mostly structure, and the paid one where
+          somebody reads it and judges the writing. The other two settle the question by letting you
+          read both answers.
+        </p>
+        <Segmented label="Model" value={choice} options={CHOICES} onChange={onChoiceChange} />
+        <p className="text-muted text-small">
+          The free model is free because what it is sent trains it. That is a decision about your
+          own resume and nobody else&apos;s, which is why this switch exists at all.
+        </p>
       </FormSection>
     </div>
   )

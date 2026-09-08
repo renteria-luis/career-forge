@@ -5,6 +5,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import Link from 'next/link'
 import { standardSchemaResolver } from '@hookform/resolvers/standard-schema'
 import { clearDraft, loadDraft, saveDraft, serializeDraft } from '@/lib/editor/draft'
+import { loadChoice, saveChoice } from '@/lib/editor/drafting'
 import { buildFieldIndex, findField } from '@/lib/editor/field-index'
 import { useActiveBlock } from '@/lib/editor/follow'
 import { formBlockTitles } from '@/lib/editor/form-blocks'
@@ -12,6 +13,7 @@ import { moveEntry, moveSection } from '@/lib/editor/rearrange'
 import { fromPortableJson, toPortableJson } from '@/lib/editor/portable'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { emptyDocument, emptyProfile, sectionsForProfile, toFormValues } from '@/lib/editor/starter'
+import type { ModelChoice } from '@/lib/ai/fields'
 import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
 import type { ResumeDocument } from '@/lib/resume/document'
 import { PAPERS, type PaperId } from '@/lib/resume/typography'
@@ -45,6 +47,7 @@ export function Editor() {
   )
   const [notes, setNotes] = useState<CareerNotes>(() => restored?.notes ?? {})
   const [target, setTarget] = useState<JobTarget>(() => restored?.target ?? {})
+  const [choice, setChoice] = useState<ModelChoice>(loadChoice)
   const [pane, setPane] = useState<Pane>('content')
   const [showPreview, setShowPreview] = useState(false)
   const [rearrange, setRearrange] = useState<RearrangeMode | null>(null)
@@ -512,13 +515,20 @@ export function Editor() {
                 {/* The tabs above named no panel, so "selected" described a
                     control that pointed at nothing. */}
                 <div role="tabpanel" id="pane-panel" aria-labelledby={`pane-tab-${pane}`}>
-                  {pane === 'content' && <ProfileForm form={form} sections={document.sections} />}
+                  {pane === 'content' && (
+                    <ProfileForm form={form} sections={document.sections} choice={choice} />
+                  )}
                   {pane === 'brief' && (
                     <BriefForm
                       notes={notes}
                       target={target}
+                      choice={choice}
                       onNotesChange={setNotes}
                       onTargetChange={setTarget}
+                      onChoiceChange={(next) => {
+                        setChoice(next)
+                        saveChoice(next)
+                      }}
                     />
                   )}
                   {pane === 'layout' && (

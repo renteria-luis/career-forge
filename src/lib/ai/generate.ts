@@ -1,7 +1,7 @@
 import { createRateLimiter, type RateLimiter } from '@/lib/http/rate-limit'
 import { basics, work, type Profile } from '@/lib/resume/profile'
-import type { GeneratedFields, GenerationFailure } from './fields'
-import { MODEL, modelClient, type ModelClient, type TokenUsage } from './model'
+import type { GeneratedFields, GenerationFailure, ModelChoice, Provider } from './fields'
+import { MODEL_NAMES, modelClient, type ModelClient, type TokenUsage } from './model'
 import { buildRequest, outputShape, type GenerationTask } from './tasks'
 
 /**
@@ -62,6 +62,54 @@ const PER_ACCOUNT = { capacity: 6, refillPerSecond: 0.05 }
  */
 const MAX_CONCURRENT = 4
 
+/**
+ * Which provider does what, when nobody has said otherwise.
+ *
+ * The rule is what the output is for. Rewriting somebody's own bullets is
+ * structure and vocabulary, and the free model is good at it; anything a
+ * stranger reads and judges the writer by is worth paying for. Both of today's
+ * tasks are the first kind, which is why `auto` currently costs nothing.
+ *
+ * This is also the table that has to change the day this application has a
+ * second user: the free tier is trained on, and §6 does not allow somebody
+ * else's resume anywhere near it. See `gemini.ts`.
+ */
+const PREFERRED: Record<GenerationTask['kind'], Provider> = {
+  summary: 'free',
+  highlights: 'free',
+}
+
+/**
+ * The provider to use, and whether the other one may stand in.
+ *
+ * An explicit choice is honoured or refused, never quietly substituted: asking
+ * for the free one and being billed for the paid one is the surprise this
+ * whole document is written to avoid. `auto` is an instruction to get it done,
+ * so it falls back either way.
+ */
+export function routeTo(
+  task: GenerationTask,
+  choice: ModelChoice,
+  configured: (provider: Provider) => boolean,
+): Provider | null {
+  const wanted: Provider = choice === 'auto' ? PREFERRED[task.kind] : choice
+  if (configured(wanted)) return wanted
+  if (choice !== 'auto') return null
+
+  const other: Provider = wanted === 'free' ? 'best' : 'free'
+  return configured(other) ? other : null
+}
+
+function resolve(
+  task: GenerationTask,
+  choice: ModelChoice,
+): { client: ModelClient; provider: Provider } | null {
+  const provider = routeTo(task, choice, (candidate) => modelClient(candidate) !== null)
+  if (!provider) return null
+  const client = modelClient(provider)
+  return client ? { client, provider } : null
+}
+
 const globalForGeneration = globalThis as {
   __generationState?: { limiter: RateLimiter; inFlight: number }
 }
@@ -94,15 +142,17 @@ export interface GenerateOptions {
 }
 
 export async function generateFields(
-  input: { profile: Profile; task: GenerationTask },
+  input: { profile: Profile; task: GenerationTask; choice?: ModelChoice },
   account: Account,
   options: GenerateOptions = {},
 ): Promise<GenerationResult> {
   const started = Date.now()
   const task = input.task
+  const choice = input.choice ?? 'auto'
+  let ran: Provider = choice === 'auto' ? PREFERRED[task.kind] : choice
 
   const report = (result: GenerationResult): GenerationResult => {
-    log(account.id, task, result, Date.now() - started)
+    log(account.id, task, ran, result, Date.now() - started)
     return result
   }
 
@@ -111,8 +161,13 @@ export async function generateFields(
   // generation, and a route is something somebody adds another of.
   if (!account.emailVerified) return report({ ok: false, failure: 'unverified' })
 
-  const client = options.client ?? modelClient()
-  if (!client) return report({ ok: false, failure: 'not-configured' })
+  let client = options.client ?? null
+  if (!client) {
+    const resolved = resolve(task, choice)
+    if (!resolved) return report({ ok: false, failure: 'not-configured' })
+    client = resolved.client
+    ran = resolved.provider
+  }
 
   const request = buildRequest(input.profile, task)
   if (!request) return report({ ok: false, failure: 'no-entry' })
@@ -206,7 +261,13 @@ function readFields(text: string, task: GenerationTask): GeneratedFields | null 
  * helpful field while debugging. `thinking` is separated out because it is
  * billed as output and is the part that moves when the effort setting changes.
  */
-function log(accountId: string, task: GenerationTask, result: GenerationResult, ms: number): void {
+function log(
+  accountId: string,
+  task: GenerationTask,
+  provider: Provider,
+  result: GenerationResult,
+  ms: number,
+): void {
   const usage = 'usage' in result ? result.usage : undefined
   const outcome = result.ok ? 'ok' : result.failure
   console.info(
@@ -214,7 +275,8 @@ function log(accountId: string, task: GenerationTask, result: GenerationResult, 
       'ai.generate',
       `account=${accountId}`,
       `task=${task.kind}`,
-      `model=${MODEL}`,
+      `provider=${provider}`,
+      `model=${MODEL_NAMES[provider]}`,
       `in=${usage?.input ?? 0}`,
       `out=${usage?.output ?? 0}`,
       `thinking=${usage?.thinking ?? 0}`,

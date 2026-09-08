@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import type { Profile } from '@/lib/resume/profile'
 import { HIGHLIGHT_SECTIONS, type HighlightSection } from './fields'
 import type { ModelRequest } from './model'
@@ -110,7 +109,7 @@ export function buildRequest(profile: Profile, task: GenerationTask): ModelReque
         .filter(Boolean)
         .join('\n'),
       maxTokens: MAX_TOKENS.summary,
-      format: zodOutputFormat(summaryOutput),
+      shape: summaryOutput,
     }
   }
 
@@ -132,7 +131,7 @@ export function buildRequest(profile: Profile, task: GenerationTask): ModelReque
       .filter(Boolean)
       .join('\n'),
     maxTokens: MAX_TOKENS.highlights,
-    format: zodOutputFormat(highlightsOutput),
+    shape: highlightsOutput,
   }
 }
 

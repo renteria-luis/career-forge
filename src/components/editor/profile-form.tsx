@@ -9,6 +9,7 @@ import {
   type FieldPath,
   type UseFormReturn,
 } from 'react-hook-form'
+import type { ModelChoice } from '@/lib/ai/fields'
 import { formBlockTitle, formBlocks, type FormBlockId } from '@/lib/editor/form-blocks'
 import type { DocumentSection } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
@@ -214,9 +215,12 @@ function ProfileLinks({ form }: { form: Form }) {
 export const ProfileForm = memo(function ProfileForm({
   form,
   sections,
+  choice,
 }: {
   form: Form
   sections: DocumentSection[]
+  /** Which model the drafting buttons ask. Set once, under Brief. */
+  choice: ModelChoice
 }) {
   const { register, control } = form
   // Hooks cannot be called conditionally, so every list is prepared and only
@@ -315,6 +319,7 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     task={{ kind: 'highlights', section: 'work', index }}
                     label="Draft the bullets"
+                    choice={choice}
                   />
                 </EntryCard>
               ))}
@@ -400,6 +405,7 @@ export const ProfileForm = memo(function ProfileForm({
                     form={form}
                     task={{ kind: 'highlights', section: 'projects', index }}
                     label="Draft the bullets"
+                    choice={choice}
                   />
                 </EntryCard>
               ))}
@@ -656,7 +662,12 @@ export const ProfileForm = memo(function ProfileForm({
                 summary is the one section drawn from the whole profile, which
                 is what makes it worth drafting and what makes it worth reading
                 back before it is used. */}
-            <DraftWithAi form={form} task={{ kind: 'summary' }} label="Draft a summary" />
+            <DraftWithAi
+              form={form}
+              task={{ kind: 'summary' }}
+              label="Draft a summary"
+              choice={choice}
+            />
           </>
         )}
       </FormSection>

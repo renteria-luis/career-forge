@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import type { UseFormReturn } from 'react-hook-form'
-import type { GeneratedFields } from '@/lib/ai/fields'
+import type { GeneratedFields, ModelChoice } from '@/lib/ai/fields'
 import type { GenerationTask } from '@/lib/ai/tasks'
 import { authClient } from '@/lib/auth/client'
+import { hasConsented, rememberConsent } from '@/lib/editor/drafting'
 import { useGeneration } from '@/lib/editor/use-generation'
 import type { Profile } from '@/lib/resume/profile'
 import { ConfirmDialog } from './confirm-dialog'
@@ -23,32 +24,6 @@ import { Button } from './fields'
  * a link to sign in; unconfirmed, a link to the page that resends the mail —
  * both of which are the actual next step, rather than a disabled button.
  */
-
-/**
- * Whether this browser has been told what drafting sends, and where.
- *
- * Asked once and remembered, because the answer does not change between one
- * bullet list and the next. Kept out of the profile: it is a fact about this
- * browser, not about the person's career.
- */
-const CONSENT_KEY = 'career-forge:ai-consent:v1'
-
-function consented(): boolean {
-  try {
-    return window.localStorage.getItem(CONSENT_KEY) === 'yes'
-  } catch {
-    // Private browsing throws here. Asking every time is the safe failure.
-    return false
-  }
-}
-
-function remember(): void {
-  try {
-    window.localStorage.setItem(CONSENT_KEY, 'yes')
-  } catch {
-    // Then it gets asked again next time, which is not worth interrupting over.
-  }
-}
 
 /** The one place a draft becomes a value in the form, and only on a click. */
 function apply(form: UseFormReturn<Profile>, fields: GeneratedFields): void {
@@ -76,11 +51,14 @@ export function DraftWithAi({
   form,
   task,
   label,
+  choice,
 }: {
   form: UseFormReturn<Profile>
   task: GenerationTask
   /** What the button says, e.g. "Draft the bullets". */
   label: string
+  /** Which model to ask. Chosen once, under Brief, and sent with the request. */
+  choice: ModelChoice
 }) {
   const { data, isPending } = authClient.useSession()
   const { state, start, stop, dismiss } = useGeneration()
@@ -89,10 +67,10 @@ export function DraftWithAi({
   // Read at the moment it is needed rather than watched: the form hands back a
   // new object every keystroke, and subscribing here would re-render every
   // entry in the resume on each one.
-  const run = () => start({ profile: form.getValues(), task })
+  const run = () => start({ profile: form.getValues(), task, choice })
 
   const request = () => {
-    if (consented()) {
+    if (hasConsented()) {
       run()
       return
     }
@@ -164,7 +142,7 @@ export function DraftWithAi({
         confirmLabel="Send it"
         cancelLabel="Not now"
         onConfirm={() => {
-          remember()
+          rememberConsent()
           setAsking(false)
           run()
         }}

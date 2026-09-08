@@ -56,6 +56,7 @@ export default defineConfig({
       // of the drafting spec sent two fixtures to the real model and was billed
       // for them. The suite tests the path, not the writing.
       ANTHROPIC_API_KEY: '',
+      GEMINI_API_KEY: '',
     },
   },
 })

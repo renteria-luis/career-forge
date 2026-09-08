@@ -28,6 +28,21 @@ export const generatedFields = z.discriminatedUnion('kind', [
 
 export type GeneratedFields = z.infer<typeof generatedFields>
 
+/**
+ * Which model runs the work.
+ *
+ * `auto` is the table in `generate.ts`: free where the output is structure more
+ * than prose, paid where a person reads it and judges the writer. The other two
+ * are for finding out whether that table is right, which is a question only
+ * reading both answers settles.
+ */
+export const MODEL_CHOICES = ['auto', 'free', 'best'] as const
+export const modelChoice = z.enum(MODEL_CHOICES)
+export type ModelChoice = z.infer<typeof modelChoice>
+
+/** The two providers, named by what they cost rather than by whose they are. */
+export type Provider = 'free' | 'best'
+
 export const GENERATION_FAILURES = [
   /** Signed in, address not confirmed. May exist; may not spend. */
   'unverified',

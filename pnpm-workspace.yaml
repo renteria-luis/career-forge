@@ -2,5 +2,11 @@ allowBuilds:
   # drizzle-kit runs the migration generator through esbuild, and esbuild's
   # install step is what puts the platform binary where it can find it.
   esbuild: true
+  # The Gemini SDK's only install script echoes a line, and protobufjs comes in
+  # behind it for a tokenizer this application never calls. Neither is needed
+  # for what ships, and `docs/architecture.md` keeps builds free of generation
+  # steps on purpose.
+  '@google/genai': false
+  protobufjs: false
   sharp: false
   unrs-resolver: false

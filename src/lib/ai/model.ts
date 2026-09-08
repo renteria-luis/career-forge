@@ -1,51 +1,28 @@
-import Anthropic, { APIError, APIUserAbortError, RateLimitError } from '@anthropic-ai/sdk'
-import type { JSONOutputFormat } from '@anthropic-ai/sdk/resources/messages'
+import type { z } from 'zod'
+import type { Provider } from './fields'
+import { ANTHROPIC_MODEL, anthropicClient } from './anthropic'
+import { GEMINI_MODEL, geminiClient } from './gemini'
 
 /**
- * The transport to the model, and the only file in this application that
- * imports the provider's SDK.
+ * The contract every provider answers, and the registry of which ones exist.
  *
- * It knows how to send one request and read one reply. It knows nothing about
- * resumes, accounts or budgets — those live in `generate.ts`, which is the only
- * caller. Splitting it this way is what lets the seam be tested against a fake
- * without a key, a network or a bill, and it keeps the question "where does
- * this application talk to a model" answerable by one grep.
+ * Nothing here knows about resumes, accounts or budgets; that is `generate.ts`,
+ * which is the only caller. The split is what lets a provider be swapped, added
+ * or tested against a fake without any of the rules moving.
  *
- * Nothing here logs a prompt or a reply. Everything crossing this boundary is
- * somebody's employment history; `docs/engineering-guidelines.md` §6 allows ids
- * and outcomes and nothing else.
+ * The request is deliberately provider-neutral, down to the output shape being
+ * a Zod schema rather than one vendor's idea of a JSON schema. Each client
+ * converts it on the way out. That is the seam that makes "run this on the free
+ * one" a routing decision rather than a rewrite.
  */
-
-/**
- * Opus 5, at low effort.
- *
- * The id is written here rather than read from the environment so that changing
- * the model is a diff somebody reviews, the same reason the font registry is a
- * file. Low effort is deliberate: writing two sentences of somebody's own
- * career back to them is not a reasoning problem, and effort is what thinking
- * tokens are billed against.
- */
-export const MODEL = 'claude-opus-5'
-const EFFORT = 'low'
-
-/**
- * One attempt may take a minute, and may be retried once.
- *
- * Cloud Run cuts a request at 300 s, so two minutes of worst case leaves room
- * for the response to be written. The SDK's default of two retries would put
- * three attempts inside that ceiling and spend three times the tokens for a
- * failure the caller can simply ask for again.
- */
-const REQUEST_TIMEOUT_MS = 60_000
-const MAX_RETRIES = 1
 
 export interface ModelRequest {
   system: string
   user: string
   /** A hard ceiling on the reply, which is also the ceiling on what it costs. */
   maxTokens: number
-  /** The shape the reply has to take. See `tasks.ts`. */
-  format: JSONOutputFormat
+  /** The shape the reply has to take. Converted per provider. */
+  shape: z.ZodType
 }
 
 export interface TokenUsage {
@@ -85,139 +62,60 @@ export interface ModelClient {
   send(request: ModelRequest, options?: SendOptions): Promise<ModelResult>
 }
 
+/** What each provider is actually running, for the log line. */
+export const MODEL_NAMES: Record<Provider, string> = {
+  free: GEMINI_MODEL,
+  best: ANTHROPIC_MODEL,
+}
+
 /**
  * Held on globalThis for the reason the Typst compiler is: HMR replacing this
  * module in development would otherwise leave a new client, and a new
  * connection pool, behind on every save.
  */
-const globalForModel = globalThis as { __modelClient?: ModelClient | null }
-
-/**
- * The client, or null when no key is configured.
- *
- * A missing key is the feature flag. The application runs without one — every
- * page works, a resume still compiles — and generation answers that it is
- * unavailable rather than the process refusing to start. That is the opposite
- * of the treatment `RESEND_API_KEY` gets, and deliberately: an account nobody
- * can reach is broken, a resume nobody asked a model to help with is not.
- */
-export function modelClient(): ModelClient | null {
-  if (globalForModel.__modelClient === undefined) {
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    globalForModel.__modelClient = apiKey ? anthropicClient(apiKey) : null
-  }
-  return globalForModel.__modelClient
-}
-
-/** Drops the cached client so a test can change the environment. */
-export function resetModelClient(): void {
-  globalForModel.__modelClient = undefined
-}
-
-function anthropicClient(apiKey: string): ModelClient {
-  const client = new Anthropic({ apiKey, maxRetries: MAX_RETRIES, timeout: REQUEST_TIMEOUT_MS })
-
-  return {
-    async send(request, options = {}) {
-      try {
-        /**
-         * Streamed, and not because anyone is watching the tokens arrive.
-         * A reply of this size takes tens of seconds, and a request that sends
-         * nothing for tens of seconds is one an intermediary is entitled to
-         * consider dead. Streaming keeps bytes moving; the reply is still only
-         * used once it is whole.
-         */
-        const stream = client.messages.stream(
-          {
-            model: MODEL,
-            max_tokens: request.maxTokens,
-            system: request.system,
-            messages: [{ role: 'user', content: request.user }],
-            output_config: { effort: EFFORT, format: request.format },
-          },
-          { signal: options.signal },
-        )
-
-        let text = ''
-        for await (const event of stream) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            text += event.delta.text
-            options.onProgress?.(text.length)
-          }
-        }
-
-        const final = await stream.finalMessage()
-
-        if (final.stop_reason === 'refusal') {
-          return { ok: false, failure: 'refused' }
-        }
-
-        return {
-          ok: true,
-          reply: {
-            text,
-            stopReason: final.stop_reason,
-            usage: {
-              input: final.usage.input_tokens,
-              output: final.usage.output_tokens,
-              thinking: final.usage.output_tokens_details?.thinking_tokens ?? 0,
-            },
-          },
-        }
-      } catch (error) {
-        return describeFailure(error)
-      }
-    },
-  }
+const globalForModel = globalThis as {
+  __modelClients?: Partial<Record<Provider, ModelClient | null>>
 }
 
 /**
- * Turns whatever the SDK threw into one of the four answers above, and writes
- * one line about it.
+ * A client for one provider, or null when it has no key.
  *
- * The line carries the status, the provider's own error type and the request
- * id, which is everything needed to ask the provider what happened. It carries
- * nothing that was sent.
- *
- * A workspace spend limit reached is a 400 and an organisation cap can be a 429
- * with no `retry-after`, so neither status is treated as a transient thing to
- * retry — the SDK has already had its one retry by the time we are here.
+ * A missing key is the feature flag, per provider. Configure neither and
+ * drafting is off while every other page works; configure one and the routing
+ * in `generate.ts` uses what is there. That is deliberately unlike
+ * `RESEND_API_KEY`, which a production build refuses to start without — an
+ * account nobody can reach is broken, a resume nobody asked a model about is
+ * not.
  */
-function describeFailure(error: unknown): {
-  ok: false
-  failure: ModelFailure
-  retryAfterSeconds?: number
-} {
-  if (error instanceof APIUserAbortError) {
-    return { ok: false, failure: 'aborted' }
+export function modelClient(provider: Provider): ModelClient | null {
+  const cache = (globalForModel.__modelClients ??= {})
+  if (!(provider in cache)) {
+    cache[provider] = build(provider)
   }
-
-  if (error instanceof APIError) {
-    const status = error.status ?? 0
-    const type = errorType(error)
-    console.error(
-      `model request failed status=${status} type=${type} request_id=${error.requestID ?? 'none'}`,
-    )
-
-    if (error instanceof RateLimitError) {
-      const retryAfter = Number(error.headers?.get('retry-after'))
-      return {
-        ok: false,
-        failure: 'unavailable',
-        ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfterSeconds: retryAfter } : {}),
-      }
-    }
-    return { ok: false, failure: 'unavailable' }
-  }
-
-  // A connection failure, a timeout, or something unforeseen. The message is
-  // the library's own and carries no request content.
-  console.error(`model request failed: ${error instanceof Error ? error.name : 'unknown error'}`)
-  return { ok: false, failure: 'unavailable' }
+  return cache[provider] ?? null
 }
 
-/** The provider's error type, e.g. `invalid_request_error`. Never the message. */
-function errorType(error: APIError): string {
-  const body = error.error as { type?: string; error?: { type?: string } } | undefined
-  return body?.error?.type ?? body?.type ?? 'unknown'
+function build(provider: Provider): ModelClient | null {
+  if (provider === 'best') {
+    const key = process.env.ANTHROPIC_API_KEY
+    return key ? anthropicClient(key) : null
+  }
+  const key = process.env.GEMINI_API_KEY
+  return key ? geminiClient(key) : null
+}
+
+/** Drops the cached clients so a test can change the environment. */
+export function resetModelClients(): void {
+  globalForModel.__modelClients = undefined
+}
+
+/**
+ * One line about a failed request, shared by both providers.
+ *
+ * It carries the status and whatever the provider calls the problem, which is
+ * everything needed to ask them what happened. It carries nothing that was
+ * sent.
+ */
+export function logFailure(provider: Provider, detail: string): void {
+  console.error(`model request failed provider=${provider} ${detail}`)
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readFrame } from '@/lib/ai/events'
-import { FAILURE_MESSAGES, type GeneratedFields } from '@/lib/ai/fields'
+import { FAILURE_MESSAGES, type GeneratedFields, type ModelChoice } from '@/lib/ai/fields'
 import type { GenerationTask } from '@/lib/ai/tasks'
 import type { Profile } from '@/lib/resume/profile'
 
@@ -28,7 +28,7 @@ export type GenerationState =
 
 export interface Generation {
   state: GenerationState
-  start: (body: { profile: Profile; task: GenerationTask }) => void
+  start: (body: { profile: Profile; task: GenerationTask; choice: ModelChoice }) => void
   /** Abandons an in-flight draft, which also stops paying for it. */
   stop: () => void
   /** Puts the control back to idle, after accepting or refusing a proposal. */
@@ -54,66 +54,69 @@ export function useGeneration(): Generation {
 
   const dismiss = useCallback(() => setState({ status: 'idle' }), [])
 
-  const start = useCallback((body: { profile: Profile; task: GenerationTask }) => {
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-    setState({ status: 'working' })
+  const start = useCallback(
+    (body: { profile: Profile; task: GenerationTask; choice: ModelChoice }) => {
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+      setState({ status: 'working' })
 
-    void (async () => {
-      try {
-        const response = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        })
+      void (async () => {
+        try {
+          const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          })
 
-        if (!response.ok || !response.body) {
-          setState({ status: 'failed', message: await refusal(response) })
-          return
-        }
+          if (!response.ok || !response.body) {
+            setState({ status: 'failed', message: await refusal(response) })
+            return
+          }
 
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffered = ''
-        // Nothing arrived that said how it went. Treated as a failure rather
-        // than as a silent return to idle, which would look like a button that
-        // does nothing.
-        let settled = false
+          const reader = response.body.getReader()
+          const decoder = new TextDecoder()
+          let buffered = ''
+          // Nothing arrived that said how it went. Treated as a failure rather
+          // than as a silent return to idle, which would look like a button that
+          // does nothing.
+          let settled = false
 
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buffered += decoder.decode(value, { stream: true })
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buffered += decoder.decode(value, { stream: true })
 
-          // Frames are separated by a blank line and may arrive split across
-          // chunks, so the tail is kept until its terminator turns up.
-          const chunks = buffered.split('\n\n')
-          buffered = chunks.pop() ?? ''
+            // Frames are separated by a blank line and may arrive split across
+            // chunks, so the tail is kept until its terminator turns up.
+            const chunks = buffered.split('\n\n')
+            buffered = chunks.pop() ?? ''
 
-          for (const chunk of chunks) {
-            const event = readFrame(chunk)
-            if (!event) continue
-            if (event.name === 'result') {
-              settled = true
-              setState({ status: 'proposed', fields: event.fields })
-            } else if (event.name === 'error') {
-              settled = true
-              setState({ status: 'failed', message: FAILURE_MESSAGES[event.failure] })
+            for (const chunk of chunks) {
+              const event = readFrame(chunk)
+              if (!event) continue
+              if (event.name === 'result') {
+                settled = true
+                setState({ status: 'proposed', fields: event.fields })
+              } else if (event.name === 'error') {
+                settled = true
+                setState({ status: 'failed', message: FAILURE_MESSAGES[event.failure] })
+              }
             }
           }
-        }
 
-        if (!settled) setState({ status: 'failed', message: FAILURE_MESSAGES.unavailable })
-      } catch (error) {
-        // An abort is somebody pressing stop, or leaving the page. Neither is
-        // something to report back to them.
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        setState({ status: 'failed', message: FAILURE_MESSAGES.unavailable })
-      }
-    })()
-  }, [])
+          if (!settled) setState({ status: 'failed', message: FAILURE_MESSAGES.unavailable })
+        } catch (error) {
+          // An abort is somebody pressing stop, or leaving the page. Neither is
+          // something to report back to them.
+          if (error instanceof DOMException && error.name === 'AbortError') return
+          setState({ status: 'failed', message: FAILURE_MESSAGES.unavailable })
+        }
+      })()
+    },
+    [],
+  )
 
   useEffect(() => () => abortRef.current?.abort(), [])
 

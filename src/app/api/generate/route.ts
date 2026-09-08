@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { frame, type GenerationEvent } from '@/lib/ai/events'
+import { modelChoice } from '@/lib/ai/fields'
 import { generateFields, type GenerationResult } from '@/lib/ai/generate'
 import { generationTask } from '@/lib/ai/tasks'
 import { lookupSession } from '@/lib/auth/session'
@@ -30,6 +31,12 @@ export const dynamic = 'force-dynamic'
 const body = z.object({
   profile,
   task: generationTask,
+  /**
+   * Which model to ask. A preference, not an instruction the server obeys
+   * blindly: `generateFields` still refuses rather than substituting a paid
+   * provider for a free one somebody explicitly asked for.
+   */
+  choice: modelChoice.default('auto'),
 })
 
 /**
