@@ -70,6 +70,13 @@ export async function verifyPassword(stored: string, password: string): Promise<
  * only moment the plaintext is in hand to rehash under new parameters is a
  * successful login. Without this check, raising the parameters would protect
  * new accounts and leave every existing one where it was.
+ *
+ * **Nothing calls this yet, and that is a gap rather than a decision.** The
+ * library's `verify` callback is handed a hash and a password and not the
+ * account they belong to, so writing a new hash back needs a hook that runs
+ * after a successful sign-in and still has the plaintext. It costs nothing
+ * today because the parameters have not moved; it costs every existing account
+ * the first time they do.
  */
 export function needsRehash(stored: string): boolean {
   try {

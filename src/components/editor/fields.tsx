@@ -222,6 +222,18 @@ export function Switch({
   )
 }
 
+/**
+ * Work is under way and its length is not knowable.
+ *
+ * Deliberately without `aria-valuenow`: a progress bar that reports a made-up
+ * percentage is worse than one that reports none, and a screen reader has a
+ * word for this state. The caller puts the elapsed seconds beside it, which is
+ * the part that is actually measured.
+ */
+export function Progress({ label }: { label: string }) {
+  return <div role="progressbar" aria-label={label} className="control-progress" />
+}
+
 /** A small run of mutually exclusive choices, for settings with two or three. */
 export function Segmented<T extends string>({
   label,

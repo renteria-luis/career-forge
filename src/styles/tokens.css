@@ -421,4 +421,57 @@
       transition: none;
     }
   }
+
+  /*
+   * Work is happening and nobody can say how much is left.
+   *
+   * Drawn as the slider's track is drawn — a 2px hairline with the accent
+   * moving along it — because that is what a measure looks like in this system.
+   * It carries no percentage and claims none: the length of a reply is not
+   * knowable until it arrives, and a bar that filled to 90% and waited would be
+   * inventing a number. The seconds beside it are the honest half.
+   */
+  .control-progress {
+    position: relative;
+    height: 2px;
+    flex: 1;
+    min-width: 3rem;
+    max-width: 10rem;
+    overflow: hidden;
+    border-radius: 1px;
+    background-color: var(--hairline);
+  }
+
+  .control-progress::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40%;
+    border-radius: 1px;
+    background-color: var(--accent);
+    animation: control-progress-travel 1.1s ease-in-out infinite;
+  }
+
+  /*
+   * Still a bar, still clearly running, and holding still. A travelling stripe
+   * is the part somebody asked not to see; that the work is under way is not.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .control-progress::after {
+      left: 0;
+      width: 100%;
+      opacity: 0.45;
+      animation: none;
+    }
+  }
+}
+
+@keyframes control-progress-travel {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
 }

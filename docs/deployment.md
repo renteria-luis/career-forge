@@ -227,6 +227,12 @@ in `.env.example`: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and
 a `RESEND_API_KEY` with an `EMAIL_FROM`. Without the last two, a production
 build refuses to register anyone rather than creating accounts nobody can reach.
 
+`BETTER_AUTH_URL` fails the same way and for a sharper reason: handed nothing,
+the account library works the origin out from the request, and that origin is
+the trusted-origin list every CSRF check and redirect is validated against. A
+deployment that forgot it would trust whatever `Host` a caller sent. It now
+throws instead.
+
 Migrations are files in `drizzle/` and are applied deliberately, with
 `DATABASE_URL=... pnpm db:migrate`, before the deploy that needs them. Nothing
 runs them at container start: a failed migration would then take the service

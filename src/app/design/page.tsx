@@ -196,6 +196,17 @@ export default function DesignSystemPage() {
               disabled
             />
           </ul>
+
+          <div className="mt-8 flex items-center gap-3">
+            <div role="progressbar" aria-label="Work under way" className="control-progress" />
+            <span className="text-muted text-micro font-mono">4s</span>
+          </div>
+          <p className="text-muted max-w-measure text-small mt-3">
+            The same hairline the slider uses, because that is what a measure looks like here. It
+            carries no percentage and claims none: a reply&apos;s length is not knowable until it
+            arrives, and a bar that filled to 90% and waited would be inventing a number. The
+            seconds beside it are the half that is measured.
+          </p>
         </Section>
 
         <Section

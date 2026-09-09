@@ -41,8 +41,27 @@ const SESSION_COOKIE_CACHE_SECONDS = 300
 /** An hour, matching the library default, and stated here so it is a decision. */
 const VERIFICATION_EXPIRY_SECONDS = 60 * 60
 
+/**
+ * The origin this application is reached at, and a refusal to guess.
+ *
+ * Handed nothing, the library works the origin out from the request itself —
+ * and that origin is the list of trusted origins, which is what the CSRF check
+ * and every redirect are validated against. A deployment that forgot this
+ * variable would therefore trust whatever `Host` a caller sent, which is the
+ * same class of mistake as reading position 0 of `X-Forwarded-For`.
+ *
+ * So it fails instead, the way the library already fails on a missing secret
+ * and the way `sendEmail` refuses to pretend a message went out. In development
+ * the fallback is harmless and the convenience is worth it.
+ */
 function baseURL(): string | undefined {
-  return process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL
+  const url = process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL
+  if (!url && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'BETTER_AUTH_URL is not set. Without it the trusted origin is taken from the request, which is not a check.',
+    )
+  }
+  return url
 }
 
 /**

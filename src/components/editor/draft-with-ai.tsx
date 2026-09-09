@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { UseFormReturn } from 'react-hook-form'
 import type { GeneratedFields, ModelChoice } from '@/lib/ai/fields'
@@ -10,7 +10,7 @@ import { hasConsented, rememberConsent } from '@/lib/editor/drafting'
 import { useGeneration } from '@/lib/editor/use-generation'
 import type { Profile } from '@/lib/resume/profile'
 import { ConfirmDialog } from './confirm-dialog'
-import { Button } from './fields'
+import { Button, Progress } from './fields'
 
 /**
  * Offers a draft for one field, and never writes one.
@@ -64,10 +64,31 @@ export function DraftWithAi({
   const { state, start, stop, dismiss } = useGeneration()
   const [asking, setAsking] = useState(false)
 
+  const working = state.status === 'working'
+
+  /**
+   * How long it has been running.
+   *
+   * The bar beside it cannot say how much is left — the length of a reply is
+   * not knowable until it arrives — so this is the half that is measured. It is
+   * also the answer to the only question somebody actually has while waiting,
+   * which is whether anything is still happening.
+   */
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    if (!working) return
+    const started = Date.now()
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000)
+    return () => clearInterval(timer)
+  }, [working])
+
   // Read at the moment it is needed rather than watched: the form hands back a
   // new object every keystroke, and subscribing here would re-render every
   // entry in the resume on each one.
-  const run = () => start({ profile: form.getValues(), task, choice })
+  const run = () => {
+    setElapsed(0)
+    start({ profile: form.getValues(), task, choice })
+  }
 
   const request = () => {
     if (hasConsented()) {
@@ -85,18 +106,20 @@ export function DraftWithAi({
     return <Away href="/resend-verification">Confirm your address to draft with AI</Away>
   }
 
-  const working = state.status === 'working'
-
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <Button className="self-start" onClick={request} disabled={working}>
+      <div className="flex items-center gap-3">
+        <Button className="shrink-0" onClick={request} disabled={working}>
           {working ? 'Writing…' : label}
         </Button>
         {working && (
-          <Button variant="quiet" onClick={stop}>
-            Stop
-          </Button>
+          <>
+            <Progress label="Writing the draft" />
+            <span className="text-muted text-micro shrink-0 font-mono">{elapsed}s</span>
+            <Button variant="quiet" className="shrink-0" onClick={stop}>
+              Stop
+            </Button>
+          </>
         )}
       </div>
 
