@@ -1171,6 +1171,36 @@ test.describe('the brief is read, not drawn', () => {
     )
   })
 
+  test('lets the model be chosen, or left alone', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'brief' }).click()
+
+    const automatic = page.getByLabel('Choose the model for me')
+    const model = page.getByRole('switch', { name: 'Use the best model' })
+
+    // Nobody has chosen, so nothing is disabled-looking for no reason: the
+    // switch shows what automatic is using and refuses to be moved.
+    await expect(automatic).toBeChecked()
+    await expect(model).toBeDisabled()
+    await expect(model).toHaveAttribute('aria-checked', 'false')
+
+    await automatic.uncheck()
+    await expect(model).toBeEnabled()
+    // Clearing the box leaves the switch where it was being shown.
+    await expect(model).toHaveAttribute('aria-checked', 'false')
+
+    await model.click()
+    await expect(model).toHaveAttribute('aria-checked', 'true')
+
+    await page.reload()
+    await page.getByRole('tab', { name: 'brief' }).click()
+    await expect(page.getByLabel('Choose the model for me')).not.toBeChecked()
+    await expect(page.getByRole('switch', { name: 'Use the best model' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+  })
+
   test('never posts the advert to the compiler', async ({ page }) => {
     await page.goto('/editor')
     await page.getByRole('tab', { name: 'brief' }).click()

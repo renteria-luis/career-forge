@@ -352,4 +352,73 @@
     mask-position: center;
     mask-size: 0.85rem;
   }
+
+  /*
+   * A switch, for the one setting that is genuinely two-ended.
+   *
+   * The rest of this system is square on purpose — a 2px radius, a ruler for a
+   * slider, a box for a checkbox. This is the exception and it earns it: a
+   * choice between two named things is a thing that slides, and drawing it as
+   * another box would say "on or off" about a setting whose two ends are both
+   * on.
+   *
+   * The state is read from `aria-checked` rather than a class, so what a screen
+   * reader is told and what the eye is shown cannot drift apart. There is one
+   * source of truth for "this is set to the second option" and the stylesheet
+   * uses the accessible one.
+   */
+  .control-switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    background-color: var(--surface-sunk);
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .control-switch[aria-checked='true'] {
+    border-color: var(--accent);
+    background-color: var(--accent);
+  }
+
+  .control-switch:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .control-switch::after {
+    content: '';
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 999px;
+    background-color: var(--sheet);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+    transition: transform 0.15s ease;
+  }
+
+  .control-switch[aria-checked='true']::after {
+    transform: translateX(1rem);
+  }
+
+  .control-switch:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-sunk);
+  }
+
+  /* Somebody who asked for less motion still needs to see which end it is on. */
+  @media (prefers-reduced-motion: reduce) {
+    .control-switch,
+    .control-switch::after {
+      transition: none;
+    }
+  }
 }

@@ -95,6 +95,38 @@ function Section({
   )
 }
 
+/**
+ * The switch, in the three states it has.
+ *
+ * Here because `docs/engineering-guidelines.md` §5 says this page renders the
+ * system: a control drawn in `tokens.css` that cannot be seen here is one the
+ * next person changing the look will miss. It is inert on purpose — this is a
+ * reference sheet, not a settings screen.
+ */
+function SwitchRow({
+  label,
+  checked,
+  disabled,
+}: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+}) {
+  return (
+    <li className="flex items-center gap-4">
+      <button
+        type="button"
+        role="switch"
+        aria-label={label}
+        aria-checked={checked}
+        disabled={disabled}
+        className="control-switch"
+      />
+      <span className="text-muted text-small">{label}</span>
+    </li>
+  )
+}
+
 export default function DesignSystemPage() {
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-16">
@@ -148,6 +180,21 @@ export default function DesignSystemPage() {
                 </div>
               </li>
             ))}
+          </ul>
+        </Section>
+
+        <Section
+          title="Controls"
+          note="Everything else in this system is square: a 2px radius, a ruler for a slider, a box for a checkbox. The switch is the exception and it earns it — a choice between two named things is a thing that slides, and a box would say 'on or off' about a setting whose two ends are both on. Its state is read from aria-checked rather than a class, so what a screen reader is told and what the eye is shown cannot come apart."
+        >
+          <ul className="flex flex-col gap-4">
+            <SwitchRow label="Off, and the first option is the one in use" checked={false} />
+            <SwitchRow label="On, and the second option is the one in use" checked={true} />
+            <SwitchRow
+              label="Disabled, because something else is deciding"
+              checked={false}
+              disabled
+            />
           </ul>
         </Section>
 

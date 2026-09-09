@@ -4,7 +4,7 @@ import type { ModelChoice } from '@/lib/ai/fields'
 import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
 import { MAX_NOTES, MAX_POSTING, MAX_VOICE } from '@/lib/resume/brief'
 import { FormSection } from './entry-card'
-import { Field, Segmented, TextArea } from './fields'
+import { Field, Switch, TextArea, Toggle } from './fields'
 
 /**
  * The pane that never reaches the PDF.
@@ -27,12 +27,6 @@ function Fill({ value, max }: { value: string | undefined; max: number }) {
   )
 }
 
-const CHOICES: { value: ModelChoice; label: string }[] = [
-  { value: 'auto', label: 'Automatic' },
-  { value: 'free', label: 'Free' },
-  { value: 'best', label: 'Best' },
-]
-
 export function BriefForm({
   notes,
   target,
@@ -50,6 +44,12 @@ export function BriefForm({
 }) {
   const setTarget = (patch: Partial<JobTarget>) => onTargetChange({ ...target, ...patch })
   const setNotes = (patch: Partial<CareerNotes>) => onNotesChange({ ...notes, ...patch })
+
+  const automatic = choice === 'auto'
+  // Under Automatic the switch shows what Automatic is actually using, so
+  // clearing the checkbox never moves it. What you were looking at is what you
+  // get.
+  const paid = choice === 'best'
 
   return (
     <div className="flex flex-col">
@@ -112,12 +112,42 @@ export function BriefForm({
       </FormSection>
 
       <FormSection title="Drafting">
+        <Toggle
+          label="Choose the model for me"
+          checked={choice === 'auto'}
+          onChange={(automatic) => onChoiceChange(automatic ? 'auto' : 'free')}
+        />
+
+        {/* The two ends are both a real answer, so the words stay put and the
+            switch moves between them. The one in use is the one in full
+            contrast; under Automatic neither is, because neither was chosen. */}
+        <div className="flex items-center gap-3">
+          <span
+            className={`text-small ${automatic ? 'text-muted' : paid ? 'text-muted' : 'text-strong font-medium'}`}
+          >
+            Free
+          </span>
+          <Switch
+            label="Use the best model"
+            checked={paid}
+            disabled={automatic}
+            onChange={(best) => onChoiceChange(best ? 'best' : 'free')}
+          />
+          <span
+            className={`text-small ${automatic ? 'text-muted' : paid ? 'text-strong font-medium' : 'text-muted'}`}
+          >
+            Best
+          </span>
+        </div>
+
         <p className="text-muted text-small">
-          Automatic uses the free model where the answer is mostly structure, and the paid one where
-          somebody reads it and judges the writing. The other two settle the question by letting you
-          read both answers.
+          {automatic
+            ? 'Automatic sends both of these drafts to the free model, because rewriting your own bullets is vocabulary rather than writing anybody judges you by. The paid one takes over when there is a cover letter.'
+            : paid
+              ? 'Every draft goes to Claude. About a cent each, against the balance on your provider workspace.'
+              : 'Every draft goes to Gemini Flash, which costs nothing.'}
         </p>
-        <Segmented label="Model" value={choice} options={CHOICES} onChange={onChoiceChange} />
+
         <p className="text-muted text-small">
           The free model is free because what it is sent trains it. That is a decision about your
           own resume and nobody else&apos;s, which is why this switch exists at all.

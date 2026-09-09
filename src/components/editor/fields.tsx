@@ -187,6 +187,41 @@ export function Toggle({
   )
 }
 
+/**
+ * A setting with two named ends, one of which is always chosen.
+ *
+ * Not a `Toggle`: that one is a box that is ticked or not, and its unticked
+ * state means "no". Here both ends are a real answer, so the control slides
+ * between them and the caller writes the two names either side.
+ *
+ * `label` is what a screen reader hears, and it names the far end — "Use the
+ * best model", off or on — because "Free, Best, switch" tells somebody the
+ * words on the page and not which one they have.
+ */
+export function Switch({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={label}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="control-switch"
+    />
+  )
+}
+
 /** A small run of mutually exclusive choices, for settings with two or three. */
 export function Segmented<T extends string>({
   label,
