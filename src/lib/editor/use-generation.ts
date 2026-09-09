@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readFrame } from '@/lib/ai/events'
 import { FAILURE_MESSAGES, type GeneratedFields, type ModelChoice } from '@/lib/ai/fields'
-import type { GenerationTask } from '@/lib/ai/tasks'
+import type { Brief, GenerationTask } from '@/lib/ai/tasks'
 import type { Profile } from '@/lib/resume/profile'
 
 /**
@@ -28,7 +28,13 @@ export type GenerationState =
 
 export interface Generation {
   state: GenerationState
-  start: (body: { profile: Profile; task: GenerationTask; choice: ModelChoice }) => void
+  start: (body: {
+    profile: Profile
+    /** The advert and the raw material. Only tailoring needs one. */
+    brief?: Brief
+    task: GenerationTask
+    choice: ModelChoice
+  }) => void
   /** Abandons an in-flight draft, which also stops paying for it. */
   stop: () => void
   /** Puts the control back to idle, after accepting or refusing a proposal. */
@@ -55,7 +61,7 @@ export function useGeneration(): Generation {
   const dismiss = useCallback(() => setState({ status: 'idle' }), [])
 
   const start = useCallback(
-    (body: { profile: Profile; task: GenerationTask; choice: ModelChoice }) => {
+    (body: { profile: Profile; brief?: Brief; task: GenerationTask; choice: ModelChoice }) => {
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller

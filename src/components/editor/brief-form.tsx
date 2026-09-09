@@ -1,10 +1,14 @@
 'use client'
 
+import type { UseFormReturn } from 'react-hook-form'
 import type { ModelChoice } from '@/lib/ai/fields'
+import type { ResumeDocument } from '@/lib/resume/document'
+import type { Profile } from '@/lib/resume/profile'
 import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
 import { MAX_NOTES, MAX_POSTING, MAX_VOICE } from '@/lib/resume/brief'
 import { FormSection } from './entry-card'
 import { Field, Switch, TextArea, Toggle } from './fields'
+import { Tailor } from './tailor'
 
 /**
  * The pane that never reaches the PDF.
@@ -28,19 +32,25 @@ function Fill({ value, max }: { value: string | undefined; max: number }) {
 }
 
 export function BriefForm({
+  form,
+  document,
   notes,
   target,
   choice,
   onNotesChange,
   onTargetChange,
   onChoiceChange,
+  onDocumentChange,
 }: {
+  form: UseFormReturn<Profile>
+  document: ResumeDocument
   notes: CareerNotes
   target: JobTarget
   choice: ModelChoice
   onNotesChange: (notes: CareerNotes) => void
   onTargetChange: (target: JobTarget) => void
   onChoiceChange: (choice: ModelChoice) => void
+  onDocumentChange: (document: ResumeDocument) => void
 }) {
   const setTarget = (patch: Partial<JobTarget>) => onTargetChange({ ...target, ...patch })
   const setNotes = (patch: Partial<CareerNotes>) => onNotesChange({ ...notes, ...patch })
@@ -87,6 +97,16 @@ export function BriefForm({
           onChange={(event) => setTarget({ posting: event.target.value.slice(0, MAX_POSTING) })}
         />
         <Fill value={target.posting} max={MAX_POSTING} />
+
+        {/* Placed here rather than beside the resume, because this is the one
+            control that needs the advert directly above it to make sense. */}
+        <Tailor
+          form={form}
+          document={document}
+          brief={{ notes, target }}
+          choice={choice}
+          onDocumentChange={onDocumentChange}
+        />
       </FormSection>
 
       <FormSection title="Raw material">

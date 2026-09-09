@@ -1201,6 +1201,14 @@ test.describe('the brief is read, not drawn', () => {
     )
   })
 
+  test('offers to aim the resume only once there is an advert', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'brief' }).click()
+
+    // Signed out, the control is the way in rather than a dead button.
+    await expect(page.getByRole('link', { name: /aim your resume at this job/i })).toBeVisible()
+  })
+
   test('never posts the advert to the compiler', async ({ page }) => {
     await page.goto('/editor')
     await page.getByRole('tab', { name: 'brief' }).click()

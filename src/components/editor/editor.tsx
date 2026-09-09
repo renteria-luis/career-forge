@@ -520,6 +520,8 @@ export function Editor() {
                   )}
                   {pane === 'brief' && (
                     <BriefForm
+                      form={form}
+                      document={document}
                       notes={notes}
                       target={target}
                       choice={choice}
@@ -529,6 +531,7 @@ export function Editor() {
                         setChoice(next)
                         saveChoice(next)
                       }}
+                      onDocumentChange={setDocument}
                     />
                   )}
                   {pane === 'layout' && (

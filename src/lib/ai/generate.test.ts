@@ -330,3 +330,161 @@ describe('who may send a resume to a model that trains on it', () => {
     resetModelClients()
   })
 })
+
+describe('a tailored reply becomes a document, or nothing', () => {
+  const advert = {
+    notes: { notes: 'Cut a 240ms query to 45ms.' },
+    target: { posting: 'Hiring a Staff ML Engineer to own ranking.' },
+  }
+  const tailor = { kind: 'tailor' } as const
+
+  it('keeps the entries the profile actually has and drops the rest', async () => {
+    const { client } = replying(
+      JSON.stringify({
+        summary: 'Ranking engineer.',
+        work: [
+          { index: 0, highlights: ['Cut latency to 45ms.'] },
+          // sampleProfile has fewer jobs than this. An index nobody has is the
+          // one way a reply can name something that is not there.
+          { index: 40, highlights: ['Invented a job.'] },
+        ],
+        projects: [],
+        skills: [0, 99],
+      }),
+    )
+
+    const result = await generateFields(
+      { profile: sampleProfile, brief: advert, task: tailor },
+      verified,
+      { client },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.ok === true && result.fields).toEqual({
+      kind: 'tailored',
+      summary: 'Ranking engineer.',
+      work: [{ index: 0, highlights: ['Cut latency to 45ms.'] }],
+      projects: [],
+      skills: [0],
+    })
+  })
+
+  it('drops an entry whose bullets are all blank rather than showing it empty', async () => {
+    const { client } = replying(
+      JSON.stringify({
+        summary: 'Ranking engineer.',
+        work: [{ index: 0, highlights: ['  ', ''] }],
+        projects: [],
+        skills: [],
+      }),
+    )
+
+    const result = await generateFields(
+      { profile: sampleProfile, brief: advert, task: tailor },
+      verified,
+      { client },
+    )
+
+    expect(result.ok === true && result.fields.kind === 'tailored' && result.fields.work).toEqual(
+      [],
+    )
+  })
+
+  it('refuses to tailor without an advert to aim at', async () => {
+    const { client, calls } = failing({ ok: false, failure: 'unavailable' })
+
+    const result = await generateFields({ profile: sampleProfile, task: tailor }, verified, {
+      client,
+    })
+
+    expect(result).toEqual({ ok: false, failure: 'no-entry' })
+    expect(calls()).toBe(0)
+  })
+
+  it('refuses a summary that comes back blank', async () => {
+    const { client } = replying(
+      JSON.stringify({ summary: '   ', work: [], projects: [], skills: [] }),
+    )
+
+    const result = await generateFields(
+      { profile: sampleProfile, brief: advert, task: tailor },
+      verified,
+      { client },
+    )
+
+    expect(result).toMatchObject({ ok: false, failure: 'invalid-output' })
+  })
+})
+
+describe('a claim the dates do not support is not stored', () => {
+  // sampleProfile's earliest job starts in March 2020, so on this date the
+  // history is about six and a half years. A year of slack on top of that is
+  // deliberate: rounding six and a half up to seven is how people speak, and a
+  // check that argues with rounding is a check nobody keeps.
+  const now = Date.UTC(2026, 8, 9)
+
+  it('refuses a summary that borrows the years the advert asked for', async () => {
+    const { client } = replying(
+      JSON.stringify({
+        summary: 'Software Architect with over twelve years of professional experience.',
+      }),
+    )
+
+    const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
+      client,
+      now,
+    })
+
+    expect(result).toMatchObject({ ok: false, failure: 'invalid-output' })
+  })
+
+  it('accepts a number the history actually supports, rounding included', async () => {
+    const { client } = replying(
+      JSON.stringify({ summary: 'Engineer with seven years building ranking systems.' }),
+    )
+
+    const result = await generateFields({ profile: sampleProfile, task: summaryTask }, verified, {
+      client,
+      now,
+    })
+
+    expect(result.ok).toBe(true)
+  })
+
+  it('says nothing about a profile with no dates in it', async () => {
+    const { client } = replying(
+      JSON.stringify({ summary: 'Engineer with twenty years of practice.' }),
+    )
+
+    const result = await generateFields(
+      { profile: { basics: { name: 'Ada' } }, task: summaryTask },
+      verified,
+      { client, now },
+    )
+
+    expect(result.ok).toBe(true)
+  })
+
+  it('catches it in a tailored reply too, where it matters most', async () => {
+    const { client } = replying(
+      JSON.stringify({
+        summary: 'Architect with 15+ years of distributed systems experience.',
+        work: [{ index: 0, highlights: ['Cut latency to 45ms.'] }],
+        projects: [],
+        skills: [],
+      }),
+    )
+
+    const result = await generateFields(
+      {
+        profile: sampleProfile,
+        brief: { notes: {}, target: { posting: 'Hiring an architect with 8+ years.' } },
+        task: { kind: 'tailor' },
+      },
+      verified,
+      { client, now },
+    )
+
+    expect(result).toMatchObject({ ok: false, failure: 'invalid-output' })
+  })
+})

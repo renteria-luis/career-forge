@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { sampleProfile } from '@/lib/resume/fixtures'
 import type { Profile } from '@/lib/resume/profile'
-import { buildRequest, generationTask } from './tasks'
+import { buildRequest, generationTask, type Brief } from './tasks'
+
+const noBrief: Brief = { notes: {}, target: {} }
 
 /**
  * What the model is told.
@@ -14,7 +16,7 @@ import { buildRequest, generationTask } from './tasks'
 
 describe('the request carries the facts and nothing else', () => {
   it('grounds a summary in the work history', () => {
-    const request = buildRequest(sampleProfile, { kind: 'summary' })
+    const request = buildRequest(sampleProfile, noBrief, { kind: 'summary' })
 
     expect(request).not.toBeNull()
     expect(request?.user).toContain('Senior ML Engineer')
@@ -24,14 +26,14 @@ describe('the request carries the facts and nothing else', () => {
   })
 
   it('leaves out the contact details that steer nothing', () => {
-    const request = buildRequest(sampleProfile, { kind: 'summary' })
+    const request = buildRequest(sampleProfile, noBrief, { kind: 'summary' })
 
     expect(request?.user).not.toContain('+51 999 888 777')
     expect(request?.user).not.toContain('ana@example.com')
   })
 
   it('marks the entry whose bullets were asked for', () => {
-    const request = buildRequest(sampleProfile, {
+    const request = buildRequest(sampleProfile, noBrief, {
       kind: 'highlights',
       section: 'work',
       index: 1,
@@ -43,22 +45,49 @@ describe('the request carries the facts and nothing else', () => {
 
   it('is null for an entry that is not there', () => {
     expect(
-      buildRequest(sampleProfile, { kind: 'highlights', section: 'work', index: 9 }),
+      buildRequest(sampleProfile, noBrief, { kind: 'highlights', section: 'work', index: 9 }),
     ).toBeNull()
-    expect(buildRequest({}, { kind: 'highlights', section: 'projects', index: 0 })).toBeNull()
+    expect(
+      buildRequest({}, noBrief, { kind: 'highlights', section: 'projects', index: 0 }),
+    ).toBeNull()
   })
 })
 
-describe('a target steers wording and cannot add content', () => {
-  it('says plainly that an unsupported term must not appear', () => {
-    const request = buildRequest(sampleProfile, {
-      kind: 'summary',
-      target: { role: 'Staff ML Engineer', keywords: ['Kubernetes', 'Ray'] },
-    })
+describe('the job being aimed at reaches the prompt', () => {
+  it('names the role and the company when the brief has them', () => {
+    const request = buildRequest(
+      sampleProfile,
+      { notes: {}, target: { role: 'Staff ML Engineer', company: 'Nomad Analytics' } },
+      { kind: 'summary' },
+    )
 
     expect(request?.user).toContain('Staff ML Engineer')
-    expect(request?.user).toContain('Kubernetes, Ray')
-    expect(request?.user).toContain('must not appear')
+    expect(request?.user).toContain('Nomad Analytics')
+  })
+})
+
+describe('tailoring needs an advert to aim at', () => {
+  it('is null without one, because there is nothing to tailor to', () => {
+    expect(buildRequest(sampleProfile, noBrief, { kind: 'tailor' })).toBeNull()
+  })
+
+  it('carries the advert, the raw material and numbered entries', () => {
+    const request = buildRequest(
+      sampleProfile,
+      {
+        notes: { notes: 'Cut a 240ms query to 45ms with a new index.' },
+        target: { posting: 'We are hiring a Staff ML Engineer to own ranking.' },
+      },
+      { kind: 'tailor' },
+    )
+
+    expect(request?.user).toContain('own ranking')
+    expect(request?.user).toContain('RAW MATERIAL')
+    expect(request?.user).toContain('Cut a 240ms query to 45ms')
+    // The indices are the handle the reply comes back with, so they have to be
+    // in what the model was shown.
+    expect(request?.user).toContain('[work 0]')
+    expect(request?.user).toContain('[skill 0]')
   })
 })
 
@@ -73,7 +102,7 @@ describe('a long profile is trimmed rather than refused', () => {
       })),
     }
 
-    const request = buildRequest(profile, { kind: 'summary' })
+    const request = buildRequest(profile, noBrief, { kind: 'summary' })
 
     expect(request?.user).toContain('Employer 7')
     expect(request?.user).not.toContain('Employer 8')
@@ -83,22 +112,10 @@ describe('a long profile is trimmed rather than refused', () => {
 })
 
 describe('the boundary bounds what may be asked', () => {
-  it('refuses a pasted job advert in place of a role', () => {
-    const result = generationTask.safeParse({
-      kind: 'summary',
-      target: { role: 'x'.repeat(500) },
-    })
-
-    expect(result.success).toBe(false)
-  })
-
-  it('refuses an unbounded keyword list', () => {
-    const result = generationTask.safeParse({
-      kind: 'summary',
-      target: { keywords: Array.from({ length: 50 }, () => 'python') },
-    })
-
-    expect(result.success).toBe(false)
+  it('refuses an entry index no resume could reach', () => {
+    expect(
+      generationTask.safeParse({ kind: 'highlights', section: 'work', index: 500 }).success,
+    ).toBe(false)
   })
 
   it('refuses a section it does not generate for', () => {

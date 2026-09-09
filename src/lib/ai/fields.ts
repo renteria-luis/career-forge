@@ -16,6 +16,12 @@ export type HighlightSection = (typeof HIGHLIGHT_SECTIONS)[number]
  * Fields, never a document. The names are the profile's own, so what comes back
  * has somewhere to go without a translation step.
  */
+/** One entry that survived tailoring, with the bullets it survived with. */
+export const tailoredEntry = z.object({
+  index: z.number().int().min(0),
+  highlights: z.array(z.string()),
+})
+
 export const generatedFields = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('summary'), summary: z.string() }),
   z.object({
@@ -23,6 +29,22 @@ export const generatedFields = z.discriminatedUnion('kind', [
     section: z.enum(HIGHLIGHT_SECTIONS),
     index: z.number().int().min(0),
     highlights: z.array(z.string()),
+  }),
+  /**
+   * A whole document aimed at one job, in one reply.
+   *
+   * Still fields: a summary and bullets are profile content, and the indices
+   * are which entries the *document* shows. Nothing is deleted from the profile
+   * — that is the split the architecture is built on, and it is what lets one
+   * career answer a dozen adverts without losing anything.
+   */
+  z.object({
+    kind: z.literal('tailored'),
+    summary: z.string(),
+    work: z.array(tailoredEntry),
+    projects: z.array(tailoredEntry),
+    /** Which skill entries earn their place, by position. */
+    skills: z.array(z.number().int().min(0)),
   }),
 ])
 

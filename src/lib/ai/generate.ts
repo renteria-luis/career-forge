@@ -1,8 +1,8 @@
 import { createRateLimiter, type RateLimiter } from '@/lib/http/rate-limit'
-import { basics, work, type Profile } from '@/lib/resume/profile'
+import { basics, project, work, type Profile } from '@/lib/resume/profile'
 import type { GeneratedFields, GenerationFailure, ModelChoice, Provider } from './fields'
 import { MODEL_NAMES, modelClient, type ModelClient, type TokenUsage } from './model'
-import { buildRequest, outputShape, type GenerationTask } from './tasks'
+import { buildRequest, outputShape, type Brief, type GenerationTask } from './tasks'
 
 /**
  * The only place this application asks a model for anything.
@@ -79,6 +79,10 @@ const MAX_CONCURRENT = 4
 const PREFERRED: Record<GenerationTask['kind'], Provider> = {
   summary: 'free',
   highlights: 'free',
+  // The biggest request this app makes and the one whose output is mostly
+  // selection. On the paid model it is about ten cents; on the free one, and
+  // for the account allowed to use it, nothing.
+  tailor: 'free',
 }
 
 /**
@@ -180,7 +184,7 @@ export interface GenerateOptions {
 }
 
 export async function generateFields(
-  input: { profile: Profile; task: GenerationTask; choice?: ModelChoice },
+  input: { profile: Profile; brief?: Brief; task: GenerationTask; choice?: ModelChoice },
   account: Account,
   options: GenerateOptions = {},
 ): Promise<GenerationResult> {
@@ -207,7 +211,9 @@ export async function generateFields(
     ran = resolved.provider
   }
 
-  const request = buildRequest(input.profile, task)
+  const brief: Brief = input.brief ?? { notes: {}, target: {} }
+  const request = buildRequest(input.profile, brief, task)
+  // Also the answer when a tailoring request arrives with no advert to aim at.
   if (!request) return report({ ok: false, failure: 'no-entry' })
 
   const allowance = state().limiter.take(account.id, options.now)
@@ -237,7 +243,7 @@ export async function generateFields(
     })
   }
 
-  const fields = readFields(result.reply.text, task)
+  const fields = readFields(result.reply.text, task, input.profile, options.now ?? Date.now())
   if (!fields) {
     return report({ ok: false, failure: 'invalid-output', usage: result.reply.usage })
   }
@@ -261,7 +267,12 @@ export async function generateFields(
  * document that is parsed by looking for the bits we recognise is how a model
  * ends up deciding what a field means.
  */
-function readFields(text: string, task: GenerationTask): GeneratedFields | null {
+function readFields(
+  text: string,
+  task: GenerationTask,
+  profile: Profile,
+  now: number,
+): GeneratedFields | null {
   let payload: unknown
   try {
     payload = JSON.parse(text) as unknown
@@ -274,21 +285,145 @@ function readFields(text: string, task: GenerationTask): GeneratedFields | null 
     if (!shaped.success) return null
     const field = basics.safeParse({ summary: shaped.data.summary })
     if (!field.success || !field.data.summary) return null
+    if (overstatesExperience(field.data.summary, profile, now)) return null
     return { kind: 'summary', summary: field.data.summary }
+  }
+
+  if (task.kind === 'tailor') {
+    const shaped = outputShape.tailor.safeParse(payload)
+    if (!shaped.success) return null
+
+    const summary = basics.safeParse({ summary: shaped.data.summary })
+    if (!summary.success || !summary.data.summary) return null
+    if (overstatesExperience(summary.data.summary, profile, now)) return null
+
+    const chosen = (
+      entries: { index: number; highlights: string[] }[],
+      schema: typeof work | typeof project,
+      available: number,
+    ) =>
+      entries
+        // An index the profile does not have is the one way this reply can name
+        // something that is not there. Dropped rather than repaired.
+        .filter((entry) => entry.index >= 0 && entry.index < available)
+        .map((entry) => ({ index: entry.index, highlights: cleanLines(entry.highlights, schema) }))
+        .filter((entry) => entry.highlights !== null) as {
+        index: number
+        highlights: string[]
+      }[]
+
+    return {
+      kind: 'tailored',
+      summary: summary.data.summary,
+      work: chosen(shaped.data.work, work, profile.work?.length ?? 0),
+      projects: chosen(shaped.data.projects, project, profile.projects?.length ?? 0),
+      skills: shaped.data.skills.filter(
+        (index) => index >= 0 && index < (profile.skills?.length ?? 0),
+      ),
+    }
   }
 
   const shaped = outputShape.highlights.safeParse(payload)
   if (!shaped.success) return null
-  const cleaned = shaped.data.highlights.map((line) => line.trim()).filter(Boolean)
-  if (cleaned.length === 0) return null
-  const field = work.safeParse({ highlights: cleaned })
-  if (!field.success || !field.data.highlights) return null
+  const cleaned = cleanLines(shaped.data.highlights, work)
+  if (!cleaned) return null
   return {
     kind: 'highlights',
     section: task.section,
     index: task.index,
-    highlights: field.data.highlights,
+    highlights: cleaned,
   }
+}
+
+/**
+ * How long this person has actually been working, in years.
+ *
+ * From the earliest start date to the latest end, or to now for a job with no
+ * end. Null when no date is given at all, which is a profile that cannot
+ * contradict anything.
+ */
+function yearsWorked(profile: Profile, now: number): number | null {
+  const starts: number[] = []
+  const ends: number[] = []
+  for (const item of profile.work ?? []) {
+    const start = Date.parse(item.startDate ?? '')
+    if (!Number.isNaN(start)) starts.push(start)
+    if (!item.endDate) {
+      ends.push(now)
+      continue
+    }
+    const end = Date.parse(item.endDate)
+    if (!Number.isNaN(end)) ends.push(end)
+  }
+  if (starts.length === 0 || ends.length === 0) return null
+  const span = Math.max(...ends) - Math.min(...starts)
+  return span / (365.25 * 24 * 60 * 60 * 1000)
+}
+
+/**
+ * Whether a sentence claims more years than the dates support.
+ *
+ * This is the fabrication that matters most and the one a person is least
+ * likely to catch, because it reads as true and it matches what the advert
+ * asked for. Measured on the first real tailoring run against a real advert:
+ * given a four-year history and an advert asking for seven years, the reply
+ * opened "Software Architect with over seven years of professional
+ * experience". Nothing else in the reply was invented; that one sentence was.
+ *
+ * A rule in the prompt is a request. This is the check.
+ *
+ * A year of slack, because a history that runs from January 2021 is fairly
+ * described as five years in December 2025 and the arithmetic above says 4.9.
+ */
+/**
+ * Spelled out, because that is how it actually arrives. The first real run
+ * wrote "over seven years", which a digits-only check reads straight past.
+ */
+const WRITTEN: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  fifteen: 15,
+  twenty: 20,
+}
+
+const YEARS_CLAIMED = new RegExp(
+  `\\b(\\d{1,2}|${Object.keys(WRITTEN).join('|')})\\s*\\+?\\s*(?:or more\\s*)?years?\\b`,
+  'gi',
+)
+
+function overstatesExperience(text: string, profile: Profile, now: number): boolean {
+  const worked = yearsWorked(profile, now)
+  if (worked === null) return false
+  for (const match of text.matchAll(YEARS_CLAIMED)) {
+    const written = match[1]?.toLowerCase() ?? ''
+    const claimed = WRITTEN[written] ?? Number(written)
+    if (Number.isFinite(claimed) && claimed > worked + 1) return true
+  }
+  return false
+}
+
+/**
+ * Bullets, trimmed and put through the schema that owns the field they go in.
+ *
+ * Null rather than an empty array, so "the model returned nothing usable" and
+ * "the model chose to return no bullets" stay different answers.
+ */
+function cleanLines(lines: string[], schema: typeof work | typeof project): string[] | null {
+  const cleaned = lines.map((line) => line.trim()).filter(Boolean)
+  if (cleaned.length === 0) return null
+  const field = schema.safeParse({ highlights: cleaned })
+  if (!field.success || !field.data.highlights) return null
+  return field.data.highlights
 }
 
 /**

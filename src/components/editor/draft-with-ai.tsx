@@ -32,6 +32,9 @@ function apply(form: UseFormReturn<Profile>, fields: GeneratedFields): void {
     form.setValue('basics.summary', fields.summary, options)
     return
   }
+  // A whole tailored document is not one field and does not belong to one
+  // button. It has its own screen; this control never asks for one.
+  if (fields.kind === 'tailored') return
   if (fields.section === 'work') {
     form.setValue(`work.${fields.index}.highlights`, fields.highlights, options)
     return
@@ -128,9 +131,10 @@ export function DraftWithAi({
       {state.status === 'proposed' && (
         <div className="border-hairline bg-surface-sunk rounded-panel flex flex-col gap-3 border p-3">
           <p className="text-muted text-micro font-mono uppercase">A draft</p>
-          {state.fields.kind === 'summary' ? (
+          {state.fields.kind === 'summary' && (
             <p className="text-strong text-small leading-relaxed">{state.fields.summary}</p>
-          ) : (
+          )}
+          {state.fields.kind === 'highlights' && (
             <ul className="flex flex-col gap-1.5">
               {state.fields.highlights.map((line, index) => (
                 <li key={index} className="text-strong text-small leading-relaxed">

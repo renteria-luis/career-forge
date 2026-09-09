@@ -7,6 +7,7 @@ import { generationTask } from '@/lib/ai/tasks'
 import { lookupSession } from '@/lib/auth/session'
 import { readBoundedText } from '@/lib/http/bounded-body'
 import { refuseIfOverLimit } from '@/lib/http/limits'
+import { careerNotes, jobTarget } from '@/lib/resume/brief'
 import { profile } from '@/lib/resume/profile'
 
 /**
@@ -30,6 +31,11 @@ export const dynamic = 'force-dynamic'
 
 const body = z.object({
   profile,
+  /**
+   * The advert and the raw material. Optional, because the two single-field
+   * tasks work without one; tailoring refuses without an advert, and says so.
+   */
+  brief: z.object({ notes: careerNotes, target: jobTarget }).optional(),
   task: generationTask,
   /**
    * Which model to ask. A preference, not an instruction the server obeys
