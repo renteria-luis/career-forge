@@ -291,6 +291,16 @@ A generation is about a cent, so a $5 balance is several hundred of them. The
 number that matters for a bill is not the per-request one anyway: it is that the
 balance is a hard stop, and the request is bounded before it is sent.
 
+Both of those tasks now run on Gemini Flash by default, where they cost nothing
+and the measured output is comparable — 526 input and 73 output tokens for the
+same summary. Two things had to be found by running it rather than reading about
+it. Thinking tokens come out of `maxOutputTokens` on that provider rather than
+sitting beside it, so a 200-token ceiling spent 191 of them reasoning about one
+sentence and returned a truncated fragment; with thinking off the same request
+answered in 41. And the free model generalised away every number in the career
+until the prompt said to keep one, which on a resume is the difference between a
+summary and a paragraph of adjectives.
+
 **Streaming.** Generation streams. A non-streaming request with a large
 `max_tokens` risks idle-connection timeouts, and the SDK raises an error for
 non-streaming requests expected to run long. Do not "fix" a timeout by

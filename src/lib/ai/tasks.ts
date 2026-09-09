@@ -101,7 +101,7 @@ export function buildRequest(profile: Profile, task: GenerationTask): ModelReque
       user: [
         'Write the professional summary for this person.',
         '',
-        'Two or three sentences, under 400 characters in total. Name the field they work in and the two or three things their history actually demonstrates. State years of experience only if the dates below make it plain.',
+        'Two or three sentences, under 400 characters in total. Name the field they work in and the two or three things their history actually demonstrates. State years of experience only if the dates below make it plain. If the history contains a number that shows scale or a result, keep one of them: a summary that generalises away the only measured thing in a career says less than the bullets underneath it.',
         aim(task.target),
         '',
         facts(profile),
