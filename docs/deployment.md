@@ -112,6 +112,98 @@ gcloud run deploy career-forge \
   --allow-unauthenticated
 ```
 
+That command still works and is the escape hatch. It is not how a change
+normally reaches the service.
+
+### What actually deploys
+
+A push to `main` does, and only after the whole suite has passed on the exact
+image being deployed. `.github/workflows/ci.yml` builds the container, starts
+it, asks it for a PDF and reads one back, and only then pushes that image to
+Artifact Registry tagged with the commit. The deploy job takes that tag.
+
+It is the tested artefact that ships, rather than a rebuild that would almost
+certainly be identical — and "almost certainly" is the reason this project
+builds a container in CI in the first place.
+
+Three things follow from that and are worth knowing:
+
+- **No key is stored anywhere.** GitHub mints a short-lived token through
+  Workload Identity Federation and Google exchanges it. There is no JSON
+  credential in the repository or in a secret.
+- **Nothing is passed for the environment.** The service already holds
+  `DATABASE_URL`, the auth secret and the mail credentials, and the deploy
+  action merges rather than replaces. The `--set-env-vars` in the command above
+  does the opposite: run it as written and the service comes back with only
+  `NODE_OPTIONS` and refuses to serve an account page. Use `--update-env-vars`
+  by hand.
+- **The deploy is checked too.** The last step asks the service that is now
+  live for a PDF. A build that passes in CI and cannot compile in its real
+  environment is exactly what that endpoint exists to catch.
+
+### Setting it up, once
+
+Three repository variables, under Settings → Secrets and variables → Actions →
+Variables: `GCP_PROJECT_ID`, `GCP_WIF_PROVIDER`, `GCP_SERVICE_ACCOUNT`. Absent
+any of them, the publish and deploy steps skip and CI stays a checker — which is
+what a fork of this repository should get.
+
+```bash
+PROJECT_ID=...            # the Cloud Run project
+REPO=renteria-luis/career-forge
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+SA="github-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud services enable iamcredentials.googleapis.com artifactregistry.googleapis.com \
+  run.googleapis.com --project="$PROJECT_ID"
+
+gcloud artifacts repositories create career-forge --repository-format=docker \
+  --location=us-central1 --project="$PROJECT_ID"
+
+gcloud iam service-accounts create github-deploy --project="$PROJECT_ID" \
+  --display-name="GitHub Actions deploy"
+
+for role in roles/run.admin roles/artifactregistry.writer roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA}" --role="$role"
+done
+
+gcloud iam workload-identity-pools create github --location=global \
+  --project="$PROJECT_ID" --display-name="GitHub Actions"
+
+# The attribute condition is the part that matters. Without it, any repository
+# on GitHub can present a token to this provider.
+gcloud iam workload-identity-pools providers create-oidc career-forge \
+  --location=global --workload-identity-pool=github --project="$PROJECT_ID" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository == '${REPO}'"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA" --project="$PROJECT_ID" \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
+
+echo "GCP_WIF_PROVIDER=projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/providers/career-forge"
+echo "GCP_SERVICE_ACCOUNT=${SA}"
+```
+
+**Set a cleanup policy on the registry before the images pile up.** The free
+allowance is 0.5 GB and this image is a few hundred megabytes, so a fortnight of
+pushes fills it and the overage is billed. Keep is evaluated before Delete:
+
+```bash
+cat > /tmp/cleanup.json <<'JSON'
+[
+  { "name": "keep-recent", "action": { "type": "Keep" },
+    "mostRecentVersions": { "keepCount": 5 } },
+  { "name": "delete-old", "action": { "type": "Delete" },
+    "condition": { "olderThan": "30d" } }
+]
+JSON
+gcloud artifacts repositories set-cleanup-policies career-forge \
+  --location=us-central1 --project="$PROJECT_ID" --policy=/tmp/cleanup.json
+```
+
 `--max-instances 1` is the cost control, and it is not optional. A public URL
 with no ceiling on instance count is the one configuration that can turn a
 crawler into an invoice. One instance handles 40 concurrent compiles in under

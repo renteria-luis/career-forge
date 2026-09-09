@@ -6,12 +6,21 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Superseding a branch's run is a favour while somebody is pushing to a pull
+# request. On main it would cancel a deploy halfway, so main runs to the end.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   NEXT_TELEMETRY_DISABLED: 1
+  REGISTRY: us-central1-docker.pkg.dev
+
+# Least privilege by default. The two jobs that talk to Google widen it to
+# `id-token: write`, which is what lets them mint a short-lived token instead of
+# holding a key.
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -62,6 +71,11 @@ jobs:
   container:
     name: Container image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.publish.outputs.image }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -124,3 +138,82 @@ jobs:
           # Round trip: the name this app typeset has to survive being read back.
           grep -q '"name":"Ana Ruiz"' /tmp/imported.json || {
             echo "import did not return the profile"; exit 1; }
+
+      # Everything below runs only for a push to main, and only once the checks
+      # above have passed on this exact image.
+      #
+      # It is pushed here rather than rebuilt in the deploy job because this is
+      # the image that answered `/api/health` and survived a PDF round trip. A
+      # rebuild would almost certainly be identical and "almost certainly" is
+      # the whole reason this project builds a container in CI at all.
+      - uses: google-github-actions/auth@v3
+        id: auth
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GCP_PROJECT_ID != '' }}
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - uses: docker/login-action@v4
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GCP_PROJECT_ID != '' }}
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.auth_token }}
+
+      - name: Publish the tested image
+        id: publish
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GCP_PROJECT_ID != '' }}
+        run: |
+          image="${REGISTRY}/${{ vars.GCP_PROJECT_ID }}/career-forge/app:${{ github.sha }}"
+          docker tag career-forge:ci "$image"
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    # Only what every check has passed on. A deploy that can outrun the suite is
+    # a deploy that will, eventually, ship the thing the suite was about to fail.
+    needs: [verify, e2e, container]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.GCP_PROJECT_ID != '' }}
+    permissions:
+      contents: read
+      id-token: write
+    # One rollout at a time, and never cancelled by the next push. Two deploys
+    # racing is the one thing here that can leave the service describing neither
+    # commit.
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/deploy-cloudrun@v3
+        id: run
+        with:
+          service: career-forge
+          region: us-central1
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          image: ${{ needs.container.outputs.image }}
+          # No `env_vars` on purpose. The service already holds DATABASE_URL,
+          # the auth secret and the mail credentials, and this action's default
+          # strategy is to merge rather than replace — so passing nothing leaves
+          # them exactly as they are. `--set-env-vars` on the command line does
+          # the opposite and would silently empty the service.
+          flags: --min-instances=0 --max-instances=1 --concurrency=40 --memory=512Mi
+
+      - name: Ask the deployed service for a PDF
+        run: |
+          # The same check the container job runs, against what is now serving.
+          # A green build that cannot compile in its real environment is exactly
+          # what this endpoint exists to catch.
+          curl -fsS --retry 5 --retry-all-errors --retry-delay 3 \
+            -o /tmp/health.json "${{ steps.run.outputs.url }}/api/health"
+          cat /tmp/health.json
+          grep -q '"ok":true' /tmp/health.json || { echo "deployed service unhealthy"; exit 1; }
