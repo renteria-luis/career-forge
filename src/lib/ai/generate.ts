@@ -28,6 +28,8 @@ import { buildRequest, outputShape, type GenerationTask } from './tasks'
 /** Who is asking. Confirmed here, not taken on trust from the caller. */
 export interface Account {
   id: string
+  /** Only ever compared against the allow-list below. Never logged. */
+  email: string
   emailVerified: boolean
 }
 
@@ -80,6 +82,33 @@ const PREFERRED: Record<GenerationTask['kind'], Provider> = {
 }
 
 /**
+ * Who may send their resume to a model that trains on it.
+ *
+ * The free tier is free because what it is sent trains it. That is a decision
+ * somebody can make about their own career and cannot make on behalf of a
+ * stranger, and this deployment's URL is public — so it is not a property of
+ * the deployment, it is a property of the account.
+ *
+ * Named addresses only, out of the environment rather than the repository,
+ * which is public and has no business holding anybody's address.
+ *
+ * **Unset means nobody in production and everybody in development.** Failing
+ * open here would be a stranger's employment history going to train a model
+ * because a variable was forgotten, which is the one outcome this rule exists
+ * to prevent; failing closed locally would only be an inconvenience with a key
+ * already on the machine.
+ */
+export function mayUseFreeModel(email: string): boolean {
+  const allowed = (process.env.FREE_MODEL_ACCOUNTS ?? '')
+    .split(',')
+    .map((address) => address.trim().toLowerCase())
+    .filter(Boolean)
+
+  if (allowed.length === 0) return process.env.NODE_ENV !== 'production'
+  return allowed.includes(email.trim().toLowerCase())
+}
+
+/**
  * The provider to use, and whether the other one may stand in.
  *
  * An explicit choice is honoured or refused, never quietly substituted: asking
@@ -100,14 +129,23 @@ export function routeTo(
   return configured(other) ? other : null
 }
 
-function resolve(
-  task: GenerationTask,
-  choice: ModelChoice,
-): { client: ModelClient; provider: Provider } | null {
-  const provider = routeTo(task, choice, (candidate) => modelClient(candidate) !== null)
-  if (!provider) return null
+type Resolved =
+  { client: ModelClient; provider: Provider } | { refusal: 'not-configured' | 'free-not-allowed' }
+
+function resolve(task: GenerationTask, choice: ModelChoice, account: Account): Resolved {
+  const free = mayUseFreeModel(account.email)
+  const provider = routeTo(task, choice, (candidate) =>
+    candidate === 'free' ? free && modelClient('free') !== null : modelClient(candidate) !== null,
+  )
+
+  if (!provider) {
+    // Two different things, and a person can act on one of them. "Switched off"
+    // sends somebody looking for a setting that is not theirs to change.
+    return { refusal: choice === 'free' && !free ? 'free-not-allowed' : 'not-configured' }
+  }
+
   const client = modelClient(provider)
-  return client ? { client, provider } : null
+  return client ? { client, provider } : { refusal: 'not-configured' }
 }
 
 const globalForGeneration = globalThis as {
@@ -163,8 +201,8 @@ export async function generateFields(
 
   let client = options.client ?? null
   if (!client) {
-    const resolved = resolve(task, choice)
-    if (!resolved) return report({ ok: false, failure: 'not-configured' })
+    const resolved = resolve(task, choice, account)
+    if ('refusal' in resolved) return report({ ok: false, failure: resolved.refusal })
     client = resolved.client
     ran = resolved.provider
   }

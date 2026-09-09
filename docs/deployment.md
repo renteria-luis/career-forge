@@ -314,6 +314,11 @@ nothing a caller controls, so it holds whatever happens to the address.
 
 ## Accounts
 
+Drafting needs `ANTHROPIC_API_KEY`, and `GEMINI_API_KEY` with
+`FREE_MODEL_ACCOUNTS` if the free provider is to be reachable at all — that
+second pair is per-account for the reason `docs/accounts-and-billing.md` gives,
+and unset means nobody here.
+
 The account system needs four settings that nothing else here does, all named
 in `.env.example`: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, and
 a `RESEND_API_KEY` with an `EMAIL_FROM`. Without the last two, a production

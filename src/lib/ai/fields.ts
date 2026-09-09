@@ -48,6 +48,8 @@ export const GENERATION_FAILURES = [
   'unverified',
   /** No key configured, so the feature is off. */
   'not-configured',
+  /** The free model exists here and this account may not use it. */
+  'free-not-allowed',
   'rate-limited',
   /** As many generations are already running as this instance will allow. */
   'busy',
@@ -73,6 +75,7 @@ export type GenerationFailure = z.infer<typeof generationFailure>
 export const FAILURE_MESSAGES: Record<GenerationFailure, string> = {
   unverified: 'Confirm your email address first.',
   'not-configured': 'Drafting is switched off here.',
+  'free-not-allowed': 'The free model is not available to this account. Use Automatic.',
   'rate-limited': 'That is a few in a row. Give it a moment.',
   busy: 'Too many drafts are running at once. Try again shortly.',
   unavailable: 'The writer is not answering. Try again in a moment.',

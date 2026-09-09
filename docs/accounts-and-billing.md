@@ -378,3 +378,13 @@ changing it is a diff somebody reviews. And the provider was chosen partly
 because its commercial terms say it may not train on what is sent — resume text
 leaving the machine at all is new to this application, and it is the first thing
 the UI has to say.
+
+A second provider sits beside it, and it is the exception that proves the rule.
+Gemini Flash is free because its free tier trains on what it receives, which is
+a decision somebody can make about their own career and cannot make for a
+stranger. So the permission is a property of the account rather than of the
+deployment: `FREE_MODEL_ACCOUNTS` names the addresses allowed to use it, and
+unset means nobody in production. Everybody else is served by Claude, and the
+routing falls back to it without being asked. That is what the note about "one
+table changes" turned into once the deployment had a public URL and a free
+provider at the same time.

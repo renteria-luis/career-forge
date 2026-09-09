@@ -57,6 +57,7 @@ export default defineConfig({
       // for them. The suite tests the path, not the writing.
       ANTHROPIC_API_KEY: '',
       GEMINI_API_KEY: '',
+      FREE_MODEL_ACCOUNTS: '',
     },
   },
 })

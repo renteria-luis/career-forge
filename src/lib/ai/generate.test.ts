@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sampleProfile } from '@/lib/resume/fixtures'
 import type { Profile } from '@/lib/resume/profile'
-import { generateFields, resetGenerationState, routeTo } from './generate'
+import { generateFields, mayUseFreeModel, resetGenerationState, routeTo } from './generate'
 import { resetModelClients, type ModelClient, type ModelRequest, type ModelResult } from './model'
 import type { GenerationTask } from './tasks'
 
@@ -13,7 +13,7 @@ import type { GenerationTask } from './tasks'
  * and a rule that lives in a route is one somebody adds a second route past.
  */
 
-const verified = { id: 'acct_1', emailVerified: true }
+const verified = { id: 'acct_1', email: 'ada@example.com', emailVerified: true }
 const usage = { input: 900, output: 120, thinking: 40 }
 
 /** A transport that answers with `text` and remembers what it was asked. */
@@ -67,7 +67,7 @@ describe('an account has to be confirmed before it can spend', () => {
     const { client, calls } = failing({ ok: false, failure: 'unavailable' })
     const result = await generateFields(
       { profile: sampleProfile, task: summaryTask },
-      { id: 'acct_2', emailVerified: false },
+      { id: 'acct_2', email: 'grace@example.com', emailVerified: false },
       { client },
     )
 
@@ -209,6 +209,7 @@ describe('one account cannot spend the balance in an afternoon', () => {
       { profile: sampleProfile, task: summaryTask },
       {
         id: 'acct_other',
+        email: 'other@example.com',
         emailVerified: true,
       },
       { client },
@@ -220,14 +221,18 @@ describe('one account cannot spend the balance in an afternoon', () => {
 describe('streams cannot take every slot the preview needs', () => {
   it('refuses the fifth concurrent generation', async () => {
     const client = hanging()
-    const accounts = ['a', 'b', 'c', 'd'].map((id) => ({ id, emailVerified: true }))
+    const accounts = ['a', 'b', 'c', 'd'].map((id) => ({
+      id,
+      email: `${id}@example.com`,
+      emailVerified: true,
+    }))
     const inFlight = accounts.map((account) =>
       generateFields({ profile: sampleProfile, task: summaryTask }, account, { client }),
     )
 
     const fifth = await generateFields(
       { profile: sampleProfile, task: summaryTask },
-      { id: 'e', emailVerified: true },
+      { id: 'e', email: 'e@example.com', emailVerified: true },
       { client },
     )
 
@@ -281,5 +286,47 @@ describe('which model runs the work', () => {
 
   it('has nothing to offer when neither is configured', () => {
     expect(routeTo(summaryTask, 'auto', nowhere)).toBeNull()
+  })
+})
+
+describe('who may send a resume to a model that trains on it', () => {
+  it('is nobody in production when the list is empty', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('FREE_MODEL_ACCOUNTS', '')
+    expect(mayUseFreeModel('ada@example.com')).toBe(false)
+    vi.unstubAllEnvs()
+  })
+
+  it('is everybody in development, where the key is already on the machine', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('FREE_MODEL_ACCOUNTS', '')
+    expect(mayUseFreeModel('ada@example.com')).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
+  it('matches a named address whatever case it arrives in', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('FREE_MODEL_ACCOUNTS', ' Ada@Example.com , grace@example.com ')
+    expect(mayUseFreeModel('ada@example.com')).toBe(true)
+    expect(mayUseFreeModel('GRACE@example.com')).toBe(true)
+    expect(mayUseFreeModel('stranger@example.com')).toBe(false)
+    vi.unstubAllEnvs()
+  })
+
+  it('tells an account that cannot use it apart from a feature that is off', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('FREE_MODEL_ACCOUNTS', 'ada@example.com')
+    vi.stubEnv('ANTHROPIC_API_KEY', 'a-key')
+    vi.stubEnv('GEMINI_API_KEY', 'a-key')
+    resetModelClients()
+
+    const refused = await generateFields(
+      { profile: sampleProfile, task: summaryTask, choice: 'free' },
+      { id: 'acct_3', email: 'stranger@example.com', emailVerified: true },
+    )
+
+    expect(refused).toEqual({ ok: false, failure: 'free-not-allowed' })
+    vi.unstubAllEnvs()
+    resetModelClients()
   })
 })

@@ -100,7 +100,11 @@ export async function POST(request: Request) {
     )
   }
 
-  const account = { id: session.user.id, emailVerified: session.user.emailVerified }
+  const account = {
+    id: session.user.id,
+    email: session.user.email,
+    emailVerified: session.user.emailVerified,
+  }
 
   /**
    * Everything from here is reported inside the stream rather than as a status
