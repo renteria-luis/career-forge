@@ -301,6 +301,14 @@ answered in 41. And the free model generalised away every number in the career
 until the prompt said to keep one, which on a resume is the difference between a
 summary and a paragraph of adjectives.
 
+The third thing is the tier itself. Measured at a human pace, about one request
+in three comes back 503 because somebody else's demand spiked, and the newest
+model is the worst of them — five requests to `gemini-3.8-flash` returned 200,
+503, 429, 429, 503, where five to `gemini-3.5-flash` returned 503, 200, 200,
+200, 200. The model is chosen by measuring rather than by taking the newest, and
+the client makes three attempts, which takes an eleven percent chance of a
+button that does nothing down to about four in a hundred.
+
 **Streaming.** Generation streams. A non-streaming request with a large
 `max_tokens` risks idle-connection timeouts, and the SDK raises an error for
 non-streaming requests expected to run long. Do not "fix" a timeout by

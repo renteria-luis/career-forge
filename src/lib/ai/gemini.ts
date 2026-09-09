@@ -21,10 +21,12 @@ import { logFailure, type ModelClient, type ModelFailure, type ModelResult } fro
  *
  * Written here rather than read from the environment, like the Anthropic one,
  * so that changing it is reviewable. Chosen by listing the models the key can
- * actually reach rather than from documentation: the id first written here was
- * a preview that four newer stable releases had already passed.
+ * actually reach and then measuring them, rather than by taking the newest:
+ * five requests to `gemini-3.8-flash` came back 200, 503, 429, 429, 503, while
+ * the same five to this one came back 503, 200, 200, 200, 200. The newest model
+ * on a free tier is the one everybody else is also hammering.
  */
-export const GEMINI_MODEL = 'gemini-3.8-flash'
+export const GEMINI_MODEL = 'gemini-3.5-flash'
 
 /**
  * Thinking off, which on this provider is not the same trade as elsewhere.
@@ -40,16 +42,18 @@ export const GEMINI_MODEL = 'gemini-3.8-flash'
 const THINKING_BUDGET = 0
 
 /**
- * One retry, on the failures that are about the provider rather than the
- * request.
+ * Three attempts, because one is not enough on this tier.
  *
- * The Anthropic SDK retries once on its own; this one does not. It matters more
- * here, because a free tier is where a spike in somebody else's demand becomes
- * your 503 — one arrived in the middle of the first live check of this file.
- * A second attempt a second later is the difference between a button that
- * sometimes does nothing and one that works.
+ * The Anthropic SDK retries once on its own; this one does not retry at all.
+ * And it needs it more: measured at a human pace, roughly one request in three
+ * comes back 503 because somebody else's demand spiked. One retry leaves an
+ * eleven percent chance of a button that does nothing, which is often enough to
+ * read as broken. Two leaves about four in a hundred.
+ *
+ * The waits are short because the whole point is that the model is free and the
+ * person is watching: three seconds of retrying beats one refusal.
  */
-const RETRY_AFTER_MS = 1000
+const RETRY_DELAYS_MS = [800, 2500]
 
 function worthRetrying(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 429 || error.status >= 500)
@@ -60,16 +64,16 @@ export function geminiClient(apiKey: string): ModelClient {
 
   return {
     async send(request, options = {}) {
-      try {
-        return await attempt(request, options)
-      } catch (error) {
-        if (!worthRetrying(error) || options.signal?.aborted) return describeFailure(error)
-        logFailure('free', `status=${(error as ApiError).status} retrying=1`)
-        await new Promise((resolve) => setTimeout(resolve, RETRY_AFTER_MS))
+      for (let taken = 0; ; taken += 1) {
         try {
           return await attempt(request, options)
-        } catch (again) {
-          return describeFailure(again)
+        } catch (error) {
+          const wait = RETRY_DELAYS_MS[taken]
+          if (wait === undefined || !worthRetrying(error) || options.signal?.aborted) {
+            return describeFailure(error)
+          }
+          logFailure('free', `status=${(error as ApiError).status} retry=${taken + 1}`)
+          await new Promise((resolve) => setTimeout(resolve, wait))
         }
       }
     },

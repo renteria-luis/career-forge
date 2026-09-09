@@ -75,7 +75,7 @@ export const FAILURE_MESSAGES: Record<GenerationFailure, string> = {
   'not-configured': 'Drafting is switched off here.',
   'rate-limited': 'That is a few in a row. Give it a moment.',
   busy: 'Too many drafts are running at once. Try again shortly.',
-  unavailable: 'The writer is not answering right now.',
+  unavailable: 'The writer is not answering. Try again in a moment.',
   refused: 'The model declined to write this one.',
   'invalid-output': 'What came back was not usable. Try again.',
   'no-entry': 'That entry is not there any more.',
