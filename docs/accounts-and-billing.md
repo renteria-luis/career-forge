@@ -301,6 +301,30 @@ answered in 41. And the free model generalised away every number in the career
 until the prompt said to keep one, which on a resume is the difference between a
 summary and a paragraph of adjectives.
 
+The fourth is the allowance, and it is the one that decides whether this
+provider is usable at all. **The free tier is twenty requests per day, per
+model.** Not per minute — the structured failure beside the error names the
+quota it hit, `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20,
+and the "please retry in 35s" in the message text is a generic backoff hint
+that has nothing to do with when the day turns over.
+
+Two things followed. Retrying a 429 was making it worse — four attempts a press
+meant five presses spent the whole day's allowance — so only a 5xx is retried
+now. And the refusal says what the allowance is instead of naming a number of
+seconds, because somebody told to wait thirty-five seconds for something that
+returns tomorrow presses the button again and learns nothing.
+
+Twenty a day is roughly two applications. That is the real cost of this
+provider, and the honest options are three: live inside it, pay for Claude at
+about a cent a draft, or enable billing on the Google project — which is the
+one worth considering, because the paid tier is a fraction of a cent per
+request **and is not trained on**, which would retire the account allow-list
+above entirely.
+
+The figures written here before this were from technology blogs claiming 1,500
+requests a day. They were describing an older model and a quota Google cut by
+more than 90% in December 2025. Measured beats read, again.
+
 The third thing is the tier itself. Measured at a human pace, about one request
 in three comes back 503 because somebody else's demand spiked, and the newest
 model is the worst of them — five requests to `gemini-3.8-flash` returned 200,

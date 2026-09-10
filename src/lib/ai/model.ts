@@ -47,7 +47,13 @@ export interface ModelReply {
  * key and an exhausted balance is something the operator reads in a log, not
  * something a visitor is told.
  */
-export type ModelFailure = 'not-configured' | 'unavailable' | 'refused' | 'aborted'
+export type ModelFailure =
+  | 'not-configured'
+  | 'unavailable'
+  | 'refused'
+  | 'aborted'
+  /** The provider's own allowance, not ours. Carries how long until it resets. */
+  | 'rate-limited'
 
 export type ModelResult =
   { ok: true; reply: ModelReply } | { ok: false; failure: ModelFailure; retryAfterSeconds?: number }

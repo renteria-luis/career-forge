@@ -41,6 +41,19 @@ export interface Generation {
   dismiss: () => void
 }
 
+/**
+ * A refusal, with the wait when there is one.
+ *
+ * "Try again in a moment" is the wrong thing to say when the answer is
+ * forty-six seconds: the free provider's allowance runs by the minute, and
+ * somebody told to wait a moment presses again immediately and meets the same
+ * wall. A number is the difference between a limit and a broken button.
+ */
+function withWait(message: string, seconds?: number): string {
+  if (!seconds) return message
+  return `${message} Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+}
+
 /** When the route refuses before the stream opens, it says so in JSON. */
 async function refusal(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as {
@@ -120,7 +133,10 @@ export function useGeneration(): Generation {
                 setState({ status: 'proposed', fields: event.fields })
               } else if (event.name === 'error') {
                 settled = true
-                setState({ status: 'failed', message: FAILURE_MESSAGES[event.failure] })
+                setState({
+                  status: 'failed',
+                  message: withWait(FAILURE_MESSAGES[event.failure], event.retryAfterSeconds),
+                })
               }
             }
           }

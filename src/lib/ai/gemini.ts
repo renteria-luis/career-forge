@@ -42,25 +42,49 @@ export const GEMINI_MODEL = 'gemini-3.5-flash'
 const THINKING_BUDGET = 0
 
 /**
- * Three attempts, because one is not enough on this tier.
+ * Three attempts, and only for the failure that retrying can fix.
  *
- * The Anthropic SDK retries once on its own; this one does not retry at all.
- * And it needs it more: measured at a human pace, roughly one request in three
- * comes back 503 because somebody else's demand spiked. One retry leaves an
- * eleven percent chance of a button that does nothing, which is often enough to
- * read as broken. Two leaves about four in a hundred.
+ * Roughly one request in three comes back 503 because somebody else's demand
+ * spiked, and a second attempt a second later usually lands. One retry leaves
+ * an eleven percent chance of a button that appears to do nothing; two leaves
+ * about four in a hundred.
  *
- * The waits are short because the whole point is that the model is free and the
- * person is watching: eight seconds of retrying beats one refusal.
- *
- * Four attempts rather than three, because the longest request this app makes —
- * the fit report, half a minute of generation — is the one that meets a spike
- * most often, and three still left it failing often enough to look broken.
+ * **A 429 is not retried, and retrying it was actively harmful.** The free tier
+ * allows twenty requests a minute per model, and the four attempts this file
+ * used to make all fell inside the same minute — so a user pressing a button
+ * four times spent the whole allowance and then met a wall for the rest of it.
+ * Ten presses in a row came back "not answering" ten times, and the retries
+ * were the reason. A quota that resets in forty-five seconds is not helped by
+ * asking again in one; the person is told how long instead.
  */
-const RETRY_DELAYS_MS = [800, 2500, 5000]
+const RETRY_DELAYS_MS = [800, 2500]
 
 function worthRetrying(error: unknown): boolean {
-  return error instanceof ApiError && (error.status === 429 || error.status >= 500)
+  return error instanceof ApiError && error.status >= 500
+}
+
+/**
+ * How long the provider says to wait — and why it is not passed on.
+ *
+ * The quota error carries "Please retry in 35s", and that number is a generic
+ * backoff hint rather than when the allowance returns. The structured failure
+ * beside it names the quota that was actually hit:
+ * `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, value 20. It is a **day**,
+ * not a minute. Telling somebody to wait thirty-five seconds when the answer is
+ * tomorrow is worse than telling them nothing, so the message says what the
+ * allowance is and the number is only logged.
+ *
+ * Kept and tested because it is the one useful thing in that text: a request
+ * refused for any other reason still deserves a real delay if the day ever
+ * comes when this tier hands one out.
+ */
+const RETRY_HINT = /retry in ([\d.]+)s/i
+const DEFAULT_WAIT_SECONDS = 60
+
+export function waitSecondsFrom(message: string): number {
+  const found = RETRY_HINT.exec(message)
+  const seconds = found ? Number(found[1]) : NaN
+  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : DEFAULT_WAIT_SECONDS
 }
 
 export function geminiClient(apiKey: string): ModelClient {
@@ -137,12 +161,26 @@ export function geminiClient(apiKey: string): ModelClient {
   }
 }
 
-function describeFailure(error: unknown): { ok: false; failure: ModelFailure } {
+function describeFailure(error: unknown): {
+  ok: false
+  failure: ModelFailure
+  retryAfterSeconds?: number
+} {
   if (error instanceof DOMException && error.name === 'AbortError') {
     return { ok: false, failure: 'aborted' }
   }
   if (error instanceof ApiError) {
     logFailure('free', `status=${error.status}`)
+    if (error.status === 429) {
+      // Its allowance, not ours, and it says when it comes back. Telling
+      // somebody to try again "in a moment" when the answer is forty-six
+      // seconds is how a limit gets mistaken for a broken button.
+      return {
+        ok: false,
+        failure: 'rate-limited',
+        retryAfterSeconds: waitSecondsFrom(error.message ?? ''),
+      }
+    }
     return { ok: false, failure: 'unavailable' }
   }
   logFailure('free', error instanceof Error ? error.name : 'unknown error')

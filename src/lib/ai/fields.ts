@@ -174,7 +174,8 @@ export const FAILURE_MESSAGES: Record<GenerationFailure, string> = {
   unverified: 'Confirm your email address first.',
   'not-configured': 'Drafting is switched off here.',
   'free-not-allowed': 'The free model is not available to this account. Use Automatic.',
-  'rate-limited': 'That is a few in a row. Give it a moment.',
+  'rate-limited':
+    'The free model has run out of requests. Its allowance is twenty a day, and it resets tomorrow. Switch to Best under Brief to carry on now.',
   busy: 'Too many drafts are running at once. Try again shortly.',
   unavailable: 'The writer is not answering. Try again in a moment.',
   refused: 'The model declined to write this one.',
