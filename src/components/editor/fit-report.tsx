@@ -20,6 +20,16 @@ import { Button, Field, Progress, Select } from './fields'
 
 type Fit = Extract<GeneratedFields, { kind: 'fit' }>
 
+/**
+ * Which gaps a person can close from here.
+ *
+ * A skill, a length of experience or a language can be something the resume
+ * failed to mention. A degree cannot, and neither can a city — those are
+ * answered by studying or by moving, not by a button, and offering one would be
+ * offering to lie.
+ */
+const CLOSEABLE = new Set(['skill', 'experience', 'language', 'other'])
+
 const VERDICT: Record<RequirementFinding['verdict'], { label: string; className: string }> = {
   met: { label: 'Met', className: 'border-accent/50 text-accent bg-accent-sunk' },
   partly: { label: 'Partly', className: 'border-extract/40 text-extract bg-extract-sunk' },
@@ -39,7 +49,7 @@ function duration(months: number): string {
   return `${years} yr ${rest} mo`
 }
 
-function Meter({ score }: { score: number }) {
+function Meter({ score, totalMonths }: { score: number; totalMonths: number | null }) {
   return (
     <div className="flex items-center gap-4">
       <p className="text-strong font-display text-display-m tabular-nums">
@@ -57,7 +67,10 @@ function Meter({ score }: { score: number }) {
         >
           <div className="bg-accent h-full" style={{ width: `${score}%` }} />
         </div>
-        <p className="text-muted text-micro mt-2 font-mono">counted from the verdicts below</p>
+        <p className="text-muted text-micro mt-2 font-mono">
+          counted from the verdicts below
+          {totalMonths !== null && ` · your paid history: ${duration(totalMonths)}`}
+        </p>
       </div>
     </div>
   )
@@ -67,18 +80,26 @@ function Meter({ score }: { score: number }) {
 function Close({
   finding,
   profile,
+  learning,
   onHave,
   onLearn,
 }: {
   finding: RequirementFinding
   profile: Profile
-  onHave: (term: string, group: number) => void
+  learning: string[]
+  onHave: (term: string, group: number, kind: RequirementFinding['kind']) => void
   onLearn: (term: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const [term, setTerm] = useState(finding.requirement)
   const [group, setGroup] = useState(0)
   const groups = profile.skills ?? []
+  const listed = learning.some((item) => item === finding.requirement)
+  const isLanguage = finding.kind === 'language'
+
+  if (listed) {
+    return <p className="text-muted text-small mt-2">On your list to learn.</p>
+  }
 
   if (!open) {
     return (
@@ -99,7 +120,7 @@ function Close({
         value={term}
         onChange={(event) => setTerm(event.target.value)}
       />
-      {groups.length > 0 && (
+      {!isLanguage && groups.length > 0 && (
         <Select
           label="Which group does it belong in?"
           value={String(group)}
@@ -113,15 +134,16 @@ function Close({
         </Select>
       )}
       <p className="text-muted text-small">
-        Then add a bullet that shows it. A skill with nothing behind it is the next thing this
-        report will mark as unproven, and the first thing an interview asks about.
+        {isLanguage
+          ? 'It goes into your languages. Set how well you speak it under Content — an advert that asks for a language usually asks for a level.'
+          : 'Then add a bullet that shows it. A skill with nothing behind it is the next thing this report will mark as unproven, and the first thing an interview asks about.'}
       </p>
       <div className="flex gap-2">
         <Button
           variant="primary"
-          disabled={term.trim() === '' || groups.length === 0}
+          disabled={term.trim() === '' || (!isLanguage && groups.length === 0)}
           onClick={() => {
-            onHave(term.trim(), group)
+            onHave(term.trim(), group, finding.kind)
             setOpen(false)
           }}
         >
@@ -129,7 +151,7 @@ function Close({
         </Button>
         <Button onClick={() => setOpen(false)}>Cancel</Button>
       </div>
-      {groups.length === 0 && (
+      {!isLanguage && groups.length === 0 && (
         <p className="text-flag text-small">
           Add a skills section under Content first, and this has somewhere to put it.
         </p>
@@ -141,12 +163,14 @@ function Close({
 function Finding({
   finding,
   profile,
+  learning,
   onHave,
   onLearn,
 }: {
   finding: RequirementFinding
   profile: Profile
-  onHave: (term: string, group: number) => void
+  learning: string[]
+  onHave: (term: string, group: number, kind: RequirementFinding['kind']) => void
   onLearn: (term: string) => void
 }) {
   const verdict = VERDICT[finding.verdict]
@@ -182,8 +206,14 @@ function Finding({
         <p className="text-muted text-micro mt-1 font-mono">from {where.join(', ')}</p>
       )}
       {(finding.verdict === 'unmet' || finding.verdict === 'unknown') &&
-        finding.kind === 'skill' && (
-          <Close finding={finding} profile={profile} onHave={onHave} onLearn={onLearn} />
+        CLOSEABLE.has(finding.kind) && (
+          <Close
+            finding={finding}
+            profile={profile}
+            learning={learning}
+            onHave={onHave}
+            onLearn={onLearn}
+          />
         )}
     </li>
   )
@@ -226,21 +256,32 @@ export function FitReport({
 
   const profile = form.getValues()
 
-  const addSkill = (term: string, group: number) => {
+  const options = { shouldDirty: true, shouldValidate: true } as const
+
+  const addTerm = (term: string, group: number, kind: RequirementFinding['kind']) => {
+    // A language is not a skill keyword. Putting it in the skills line is how a
+    // resume ends up saying "French" next to "PyTorch".
+    if (kind === 'language') {
+      const languages = profile.languages ?? []
+      if (languages.some((item) => item.language?.toLowerCase() === term.toLowerCase())) return
+      form.setValue('languages', [...languages, { language: term }], options)
+      return
+    }
+
     const existing = profile.skills?.[group]?.keywords ?? []
     if (existing.some((keyword) => keyword.toLowerCase() === term.toLowerCase())) return
-    form.setValue(`skills.${group}.keywords`, [...existing, term], {
-      shouldDirty: true,
-      shouldValidate: true,
-    })
+    form.setValue(`skills.${group}.keywords`, [...existing, term], options)
   }
 
   const addLearning = (term: string) => {
-    const current = brief.notes.learning ?? []
-    if (current.some((item) => item.toLowerCase() === term.toLowerCase())) return
-    onNotesChange({ ...brief.notes, learning: [...current, term].slice(0, 30) })
+    if (learning.some((item) => item.toLowerCase() === term.toLowerCase())) return
+    // Bounded here as well as at the boundary. A requirement as an advert words
+    // it runs long, and one character over used to fail the next request with
+    // nothing but "that does not match the expected shape".
+    onNotesChange({ ...brief.notes, learning: [...learning, term.slice(0, 160)].slice(0, 30) })
   }
 
+  const learning = brief.notes.learning ?? []
   const required = report?.requirements.filter((r) => r.importance === 'required') ?? []
   const preferred = report?.requirements.filter((r) => r.importance === 'preferred') ?? []
 
@@ -284,7 +325,7 @@ export function FitReport({
 
       {report && (
         <div className="flex flex-col gap-8 pb-6">
-          <Meter score={report.score} />
+          <Meter score={report.score} totalMonths={report.totalMonths} />
 
           <section>
             <h3 className="text-strong font-display text-title">What they asked for</h3>
@@ -294,7 +335,8 @@ export function FitReport({
                   key={`req-${index}`}
                   finding={finding}
                   profile={profile}
-                  onHave={addSkill}
+                  learning={learning}
+                  onHave={addTerm}
                   onLearn={addLearning}
                 />
               ))}
@@ -310,7 +352,8 @@ export function FitReport({
                     key={`pref-${index}`}
                     finding={finding}
                     profile={profile}
-                    onHave={addSkill}
+                    learning={learning}
+                    onHave={addTerm}
                     onLearn={addLearning}
                   />
                 ))}

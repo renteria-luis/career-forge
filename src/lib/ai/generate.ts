@@ -301,8 +301,23 @@ function readFields(
     // answer, it is a failed one.
     if (shaped.data.requirements.length === 0) return null
 
+    /**
+     * The whole paid history, which is what "7+ years of experience" is about.
+     *
+     * A requirement of that kind is about the career rather than about any one
+     * job, and the model rarely cites every entry for it. Answering "you do not
+     * meet this" without saying what the person does have is the least useful
+     * sentence the report could produce.
+     */
+    const everyJob = (profile.work ?? []).map((_, index) => ({
+      section: 'work' as const,
+      index,
+    }))
+    const totalMonths = monthsCovered(profile, everyJob, now)
+
     const requirements = shaped.data.requirements.map((finding) => {
       const evidence = realEvidence(profile, finding.evidence)
+      const cited = monthsCovered(profile, evidence, now)
       return {
         ...finding,
         evidence,
@@ -312,13 +327,14 @@ function readFields(
           evidence.length === 0 && (finding.verdict === 'met' || finding.verdict === 'partly')
             ? ('unknown' as const)
             : finding.verdict,
-        months: monthsCovered(profile, evidence, now),
+        months: cited ?? (finding.kind === 'experience' ? totalMonths : null),
       }
     })
 
     return {
       kind: 'fit',
       score: scoreOf(requirements),
+      totalMonths,
       requirements,
       surplus: shaped.data.surplus,
       recommendations: shaped.data.recommendations,

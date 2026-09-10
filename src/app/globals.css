@@ -25,9 +25,17 @@
     border-radius: var(--radius-edge);
   }
 
+  /*
+   * Inverted rather than tinted.
+   *
+   * A pale accent wash on a ground that is already tinted paper lands within a
+   * few percent of it, so a selection was there and barely readable. Ink
+   * becomes the ground and the letters become the sheet, which is what a
+   * selection looks like on paper under a marker.
+   */
   ::selection {
-    background-color: var(--accent-sunk);
-    color: var(--text-strong);
+    background-color: var(--text-strong);
+    color: var(--sheet);
   }
 }
 

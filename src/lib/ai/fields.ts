@@ -109,6 +109,8 @@ export const generatedFields = z.discriminatedUnion('kind', [
     kind: z.literal('fit'),
     /** Out of 100, counted from the verdicts below rather than asked for. */
     score: z.number().int().min(0).max(100),
+    /** Months of paid work in the whole history, for the requirements about it. */
+    totalMonths: z.number().int().min(0).nullable(),
     requirements: z.array(requirementFinding),
     /** What the resume spends space on that this advert has no use for. */
     surplus: z.array(

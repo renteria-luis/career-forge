@@ -623,6 +623,31 @@ describe('a fit report is counted, not asked for', () => {
     expect(result.ok === true && result.fields.kind === 'fit' && result.fields.score).toBe(0)
   })
 
+  it('answers a requirement about the whole career with the whole career', async () => {
+    const result = await run(
+      reportOf([
+        {
+          requirement: '7+ years of professional software development experience',
+          kind: 'experience',
+          importance: 'required',
+          verdict: 'partly',
+          // The model rarely cites every job for this one, and often cites none.
+          evidence: [],
+          note: 'Short of what they ask for.',
+          months: null,
+        },
+      ]),
+    )
+
+    const fields = result.ok === true && result.fields.kind === 'fit' ? result.fields : null
+    // All three jobs, which is ten months more than the two cited in the test
+    // above: a requirement about a career is about the whole of it. Saying "you
+    // do not meet this" without saying what they do have is the least useful
+    // sentence this report could produce.
+    expect(fields?.requirements[0]?.months).toBe(77)
+    expect(fields?.totalMonths).toBe(77)
+  })
+
   it('refuses a report that found no requirements at all', async () => {
     expect(await run(reportOf([]))).toMatchObject({ ok: false, failure: 'invalid-output' })
   })

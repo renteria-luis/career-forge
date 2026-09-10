@@ -43,9 +43,22 @@ export interface Generation {
 
 /** When the route refuses before the stream opens, it says so in JSON. */
 async function refusal(response: Response): Promise<string> {
-  const body = (await response.json().catch(() => null)) as { error?: string } | null
-  if (body?.error) return body.error
-  return FAILURE_MESSAGES.unavailable
+  const body = (await response.json().catch(() => null)) as {
+    error?: string
+    fields?: { path: string; message: string }[]
+  } | null
+  if (!body?.error) return FAILURE_MESSAGES.unavailable
+
+  /**
+   * The field path, when the boundary named one.
+   *
+   * A bare "that does not match the expected shape" is true and useless: it
+   * happened once for a note one character over its limit, and the only way to
+   * find out was to read the server. The path is safe to show — it is a field
+   * name, never a value.
+   */
+  const field = body.fields?.[0]
+  return field ? `${body.error} (${field.path}: ${field.message})` : body.error
 }
 
 export function useGeneration(): Generation {

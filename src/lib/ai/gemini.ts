@@ -51,9 +51,13 @@ const THINKING_BUDGET = 0
  * read as broken. Two leaves about four in a hundred.
  *
  * The waits are short because the whole point is that the model is free and the
- * person is watching: three seconds of retrying beats one refusal.
+ * person is watching: eight seconds of retrying beats one refusal.
+ *
+ * Four attempts rather than three, because the longest request this app makes —
+ * the fit report, half a minute of generation — is the one that meets a spike
+ * most often, and three still left it failing often enough to look broken.
  */
-const RETRY_DELAYS_MS = [800, 2500]
+const RETRY_DELAYS_MS = [800, 2500, 5000]
 
 function worthRetrying(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 429 || error.status >= 500)

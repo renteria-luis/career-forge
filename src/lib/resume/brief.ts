@@ -64,8 +64,14 @@ export const careerNotes = z.object({
    * A gap somebody intends to close is worth writing down and is not worth
    * claiming. Keeping the two apart in the data is what stops "I will learn
    * this" from quietly becoming a line an employer reads.
+   *
+   * Long enough for a requirement as an advert words it. The first cap was 80
+   * characters, which is shorter than "Experience designing agentic AI
+   * architectures and AI-driven automation" — so adding one made the whole
+   * profile fail validation on the next request, and the error said only that
+   * the request did not match the expected shape.
    */
-  learning: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+  learning: z.array(z.string().trim().min(1).max(160)).max(30).optional(),
 })
 
 export type JobTarget = z.infer<typeof jobTarget>
