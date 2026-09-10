@@ -142,6 +142,20 @@
  * article. A variable font ignores the axis unless something sets it.
  */
 @layer base {
+  /*
+   * Selected text, which was all but invisible.
+   *
+   * The browser default tints the background, and this ground is already a
+   * tinted paper — the two land within a few percent of each other. Inverting
+   * instead is what a selection looks like on paper under a marker: the ink
+   * becomes the ground and the letters become the sheet, at full contrast,
+   * everywhere in the app rather than on the one screen somebody noticed it on.
+   */
+  ::selection {
+    background-color: var(--text-strong);
+    color: var(--sheet);
+  }
+
   .font-display {
     font-stretch: 115%;
   }

@@ -557,6 +557,29 @@ describe('a fit report is counted, not asked for', () => {
     expect(months).toBe(67)
   })
 
+  it('gives no figure for a skill shown only in a project', async () => {
+    const result = await run(
+      reportOf([
+        {
+          requirement: 'Rust',
+          kind: 'skill',
+          importance: 'required',
+          verdict: 'met',
+          evidence: [{ section: 'projects', index: 0 }],
+          note: 'Shown in a project.',
+        },
+      ]),
+    )
+
+    // A project says somebody can do a thing. It never says how long they have
+    // been paid to, and a figure here would start describing a weekend.
+    const finding =
+      result.ok === true && result.fields.kind === 'fit' ? result.fields.requirements[0] : null
+    expect(finding?.months).toBeNull()
+    // The citation still stands, so the match is not demoted.
+    expect(finding?.verdict).toBe('met')
+  })
+
   it('says nothing about duration when the cited entries carry no dates', async () => {
     const result = await run(
       reportOf([

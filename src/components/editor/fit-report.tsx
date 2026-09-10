@@ -42,7 +42,10 @@ function duration(months: number): string {
 function Meter({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-4">
-      <p className="text-strong font-display text-display-m tabular-nums">{score}</p>
+      <p className="text-strong font-display text-display-m tabular-nums">
+        {score}
+        <span className="text-muted text-title">/100</span>
+      </p>
       <div className="min-w-0 flex-1">
         <div
           role="meter"
@@ -54,9 +57,7 @@ function Meter({ score }: { score: number }) {
         >
           <div className="bg-accent h-full" style={{ width: `${score}%` }} />
         </div>
-        <p className="text-muted text-micro mt-2 font-mono">
-          counted from the verdicts below · required counts three times a preferred one
-        </p>
+        <p className="text-muted text-micro mt-2 font-mono">counted from the verdicts below</p>
       </div>
     </div>
   )
@@ -245,13 +246,7 @@ export function FitReport({
 
   return (
     <div className="flex flex-col">
-      <p className="text-muted text-small border-hairline border-b pb-4">
-        What this advert asks for, line by line, and where your resume answers it. The score and the
-        durations are counted from your own dates; the sentences are a model&apos;s reading and are
-        worth arguing with.
-      </p>
-
-      <div className="flex flex-col gap-3 py-6">
+      <div className="flex flex-col gap-3 pt-2 pb-6">
         <div className="flex items-center gap-3">
           <Button
             variant="primary"

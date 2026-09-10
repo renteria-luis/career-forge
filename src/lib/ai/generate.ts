@@ -217,7 +217,7 @@ export async function generateFields(
   }
 
   const brief: Brief = input.brief ?? { notes: {}, target: {} }
-  const request = buildRequest(input.profile, brief, task)
+  const request = buildRequest(input.profile, brief, task, options.now ?? Date.now())
   // Also the answer when a tailoring request arrives with no advert to aim at.
   if (!request) return report({ ok: false, failure: 'no-entry' })
 
@@ -411,12 +411,16 @@ function span(
 }
 
 /**
- * How many months the cited history actually covers.
+ * How many months of *paid work* the cited history covers.
  *
  * A union rather than a sum: two jobs that overlap are not twice the
  * experience, and a person who used Python at both did not use it for twice as
- * long. Entries without dates contribute nothing, and a citation of only those
- * gives null — which the screen says as "not dated" rather than as zero.
+ * long.
+ *
+ * Work only. A project is evidence that somebody can do a thing and is never
+ * evidence of how long they have been paid to — counting one here is how a
+ * figure starts describing a weekend. Evidence that is all projects gives null,
+ * which the screen shows as no figure rather than as zero.
  */
 function monthsCovered(
   profile: Profile,
@@ -425,12 +429,8 @@ function monthsCovered(
 ): number | null {
   const ranges: [number, number][] = []
   for (const ref of evidence) {
-    const item =
-      ref.section === 'work'
-        ? profile.work?.[ref.index]
-        : ref.section === 'projects'
-          ? profile.projects?.[ref.index]
-          : undefined
+    if (ref.section !== 'work') continue
+    const item = profile.work?.[ref.index]
     const range = item ? span(item, now) : null
     if (range) ranges.push(range)
   }

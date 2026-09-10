@@ -150,6 +150,7 @@ const FIT_RULES = [
   'Judge the competence, not the word. An advert asking for pandas, numpy and scikit-learn is asking for Python, and a resume showing those shows Python. A resume saying PostgreSQL answers "SQL databases"; one saying PyTorch answers "deep learning frameworks". Never mark something unmet because an exact string is absent.',
   'Every verdict of met or partly cites the entries that prove it, by section and index, from the FACTS. A match you cannot point at is a match you must not claim — mark it unknown instead.',
   'met: the resume shows it plainly, in a job or a project. partly: the resume shows something close — the skill in a project rather than a job, a neighbouring technology, less of it than asked for. unmet: the resume does not show it and the person plainly does not have it. unknown: the advert asks and the resume simply does not say, which is an omission rather than a gap.',
+  'Each work entry carries the months it covers, already worked out for you. To answer "how long with X", add the months of the work entries whose bullets show X — adding 43 and 13 is the whole of the arithmetic here. Projects and education carry no months and are not professional experience: they are evidence that somebody can do a thing, never evidence of how long they have been paid to.',
   'Write no durations at all. Not in a requirement, not in a note, not anywhere: no "four years", no "about 18 months", no "since 2021". Cite the entries instead, and the length is worked out from their dates and shown beside what you wrote. A note that says "your history spans approximately four years" is both forbidden and, when the dates say six, wrong in front of the person reading it. Say what is short, not how short.',
   'The advert is not a source of facts about the person. A job title, a technology or a length of experience that appears only in the advert must never appear in what you write about them.',
   'Notes are one sentence, addressed to the person, concrete, and never praise. "Shown in a project rather than in a job" is a note. "Strong match!" is not.',
@@ -178,6 +179,7 @@ export function buildRequest(
   profile: Profile,
   brief: Brief,
   task: GenerationTask,
+  now: number = Date.now(),
 ): ModelRequest | null {
   if (task.kind === 'summary') {
     return {
@@ -188,7 +190,7 @@ export function buildRequest(
         'Two or three sentences, under 400 characters in total. Name the field they work in and the two or three things their history actually demonstrates. State years of experience only if the dates below make it plain. If the history contains a number that shows scale or a result, keep one of them: a summary that generalises away the only measured thing in a career says less than the bullets underneath it.',
         aim(brief.target),
         '',
-        facts(profile),
+        facts(profile, now),
       ]
         .filter(Boolean)
         .join('\n'),
@@ -217,7 +219,7 @@ export function buildRequest(
         '',
         rawMaterial(brief.notes),
         '',
-        facts(profile),
+        facts(profile, now),
       ]
         .filter(Boolean)
         .join('\n'),
@@ -250,7 +252,7 @@ export function buildRequest(
         '',
         rawMaterial(brief.notes),
         '',
-        facts(profile),
+        facts(profile, now),
       ]
         .filter(Boolean)
         .join('\n'),
@@ -272,7 +274,7 @@ export function buildRequest(
       '',
       `FOCUS ENTRY:\n${entry}`,
       '',
-      facts(profile),
+      facts(profile, now),
     ]
       .filter(Boolean)
       .join('\n'),
@@ -324,7 +326,7 @@ function focusEntry(profile: Profile, section: HighlightSection, index: number):
  * for writing are included: an address, a phone number and a photo URL steer
  * nothing and are personal data that does not need to leave the machine.
  */
-function facts(profile: Profile): string {
+function facts(profile: Profile, now: number): string {
   const lines: string[] = ['FACTS:']
 
   const basics = profile.basics
@@ -353,7 +355,7 @@ function facts(profile: Profile): string {
   const work = (profile.work ?? []).slice(0, MAX_WORK_ENTRIES)
   if (work.length > 0) {
     lines.push('Work:')
-    work.forEach((item, index) => lines.push(workLines(item, MAX_BULLETS_PER_ENTRY, index)))
+    work.forEach((item, index) => lines.push(workLines(item, MAX_BULLETS_PER_ENTRY, index, now)))
   }
 
   const education = (profile.education ?? []).slice(0, MAX_OTHER_ENTRIES)
@@ -380,17 +382,37 @@ function facts(profile: Profile): string {
  * their own, and the document already selects them by position — see
  * `entryIds` in `src/lib/typst/model.ts`.
  */
+/**
+ * How many whole months an entry covers. Undated entries carry none.
+ *
+ * Worked out here and written into the prompt rather than left to the model.
+ * Subtracting dates and adding the results is arithmetic, and arithmetic is the
+ * thing a model is worst at and most confident about: one run against a real
+ * advert reported "approximately four years" for a history the dates put at six
+ * and a half. Handed 43 and 13, adding them is a much smaller ask.
+ */
+function monthsOf(item: { startDate?: string; endDate?: string }, now: number): number | null {
+  const start = Date.parse(item.startDate ?? '')
+  if (Number.isNaN(start)) return null
+  const end = item.endDate ? Date.parse(item.endDate) : now
+  if (Number.isNaN(end) || end < start) return null
+  return Math.round((end - start) / (30.44 * 24 * 60 * 60 * 1000))
+}
+
 function workLines(
   item: NonNullable<Profile['work']>[number],
   maxBullets: number,
   index?: number,
+  now?: number,
 ): string {
+  const months = now === undefined ? null : monthsOf(item, now)
   const head = [
     item.position ?? 'unnamed role',
     item.name ? `at ${item.name}` : null,
     item.location,
     item.arrangement,
     period(item.startDate, item.endDate),
+    months === null ? null : `${months} months`,
   ]
     .filter(Boolean)
     .join(', ')
