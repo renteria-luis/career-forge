@@ -488,3 +488,119 @@ describe('a claim the dates do not support is not stored', () => {
     expect(result).toMatchObject({ ok: false, failure: 'invalid-output' })
   })
 })
+
+describe('a fit report is counted, not asked for', () => {
+  const now = Date.UTC(2026, 8, 9)
+  const advert = { notes: {}, target: { posting: 'Hiring a Python engineer.' } }
+  const fit = { kind: 'fit' } as const
+
+  function reportOf(requirements: unknown[], extra: Record<string, unknown> = {}) {
+    return JSON.stringify({ requirements, surplus: [], recommendations: [], ...extra })
+  }
+
+  async function run(text: string) {
+    const { client } = replying(text)
+    return generateFields({ profile: sampleProfile, brief: advert, task: fit }, verified, {
+      client,
+      now,
+    })
+  }
+
+  it('weighs a required miss more heavily than a preferred one', async () => {
+    const result = await run(
+      reportOf([
+        {
+          requirement: 'Python',
+          kind: 'skill',
+          importance: 'required',
+          verdict: 'met',
+          evidence: [{ section: 'work', index: 0 }],
+          note: 'Shown at Nomad Analytics.',
+        },
+        {
+          requirement: 'Kubernetes',
+          kind: 'skill',
+          importance: 'preferred',
+          verdict: 'unmet',
+          evidence: [],
+          note: 'Not on the resume.',
+        },
+      ]),
+    )
+
+    // One required met against one preferred missed: 1 / (1 + 0.35).
+    expect(result.ok === true && result.fields.kind === 'fit' && result.fields.score).toBe(74)
+  })
+
+  it('adds up the time the cited jobs cover, and not the month between them', async () => {
+    const result = await run(
+      reportOf([
+        {
+          requirement: 'Python',
+          kind: 'skill',
+          importance: 'required',
+          verdict: 'met',
+          evidence: [
+            { section: 'work', index: 0 },
+            { section: 'work', index: 1 },
+          ],
+          note: 'Both roles.',
+        },
+      ]),
+    )
+
+    // Two years at Retail Grid plus forty-three months at Nomad Analytics. The
+    // month between the two jobs is not experience and is not counted, and two
+    // jobs held at once would not have been counted twice either.
+    const months =
+      result.ok === true && result.fields.kind === 'fit' ? result.fields.requirements[0]?.months : 0
+    expect(months).toBe(67)
+  })
+
+  it('says nothing about duration when the cited entries carry no dates', async () => {
+    const result = await run(
+      reportOf([
+        {
+          requirement: 'A degree',
+          kind: 'education',
+          importance: 'required',
+          verdict: 'met',
+          evidence: [{ section: 'skills', index: 0 }],
+          note: 'Listed.',
+        },
+      ]),
+    )
+
+    const months =
+      result.ok === true && result.fields.kind === 'fit'
+        ? result.fields.requirements[0]?.months
+        : undefined
+    expect(months).toBeNull()
+  })
+
+  it('demotes a match whose every citation pointed at nothing', async () => {
+    const result = await run(
+      reportOf([
+        {
+          requirement: 'Rust',
+          kind: 'skill',
+          importance: 'required',
+          verdict: 'met',
+          evidence: [{ section: 'work', index: 40 }],
+          note: 'Claimed but unciteable.',
+        },
+      ]),
+    )
+
+    const finding =
+      result.ok === true && result.fields.kind === 'fit' ? result.fields.requirements[0] : null
+    expect(finding?.verdict).toBe('unknown')
+    expect(finding?.evidence).toEqual([])
+    // And it earns nothing, which is the point of demoting it.
+    expect(result.ok === true && result.fields.kind === 'fit' && result.fields.score).toBe(0)
+  })
+
+  it('refuses a report that found no requirements at all', async () => {
+    expect(await run(reportOf([]))).toMatchObject({ ok: false, failure: 'invalid-output' })
+  })
+})

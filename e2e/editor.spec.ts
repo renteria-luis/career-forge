@@ -1209,6 +1209,20 @@ test.describe('the brief is read, not drawn', () => {
     await expect(page.getByRole('link', { name: /aim your resume at this job/i })).toBeVisible()
   })
 
+  test('the fit report waits for an advert and says so', async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('tab', { name: 'fit' }).click()
+
+    await expect(page.getByRole('button', { name: 'Check against this job' })).toBeDisabled()
+    await expect(page.getByText('Paste the advert under Brief')).toBeVisible()
+
+    await page.getByRole('tab', { name: 'brief' }).click()
+    await page.getByLabel('The posting', { exact: true }).fill('We are hiring a Staff ML Engineer.')
+    await page.getByRole('tab', { name: 'fit' }).click()
+
+    await expect(page.getByRole('button', { name: 'Check against this job' })).toBeEnabled()
+  })
+
   test('never posts the advert to the compiler', async ({ page }) => {
     await page.goto('/editor')
     await page.getByRole('tab', { name: 'brief' }).click()

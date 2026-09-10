@@ -13,13 +13,14 @@ import { moveEntry, moveSection } from '@/lib/editor/rearrange'
 import { fromPortableJson, toPortableJson } from '@/lib/editor/portable'
 import { useCompiledPdf } from '@/lib/editor/use-compiled-pdf'
 import { emptyDocument, emptyProfile, sectionsForProfile, toFormValues } from '@/lib/editor/starter'
-import type { ModelChoice } from '@/lib/ai/fields'
+import type { GeneratedFields, ModelChoice } from '@/lib/ai/fields'
 import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
 import type { ResumeDocument } from '@/lib/resume/document'
 import { PAPERS, type PaperId } from '@/lib/resume/typography'
 import { profile as profileSchema, type Profile } from '@/lib/resume/profile'
 import type { ParseReport } from '@/lib/parse/parse'
 import { BriefForm } from './brief-form'
+import { FitReport } from './fit-report'
 import { DocumentControls } from './document-controls'
 import { ConfirmDialog } from './confirm-dialog'
 import { Button, Segmented } from './fields'
@@ -29,7 +30,7 @@ import type { RearrangeMode } from './rearrange-overlay'
 import { ProfileForm } from './profile-form'
 import { SectionIndex } from './section-index'
 
-const PANES = ['content', 'brief', 'layout'] as const
+const PANES = ['content', 'brief', 'fit', 'layout'] as const
 type Pane = (typeof PANES)[number]
 
 export function Editor() {
@@ -48,6 +49,15 @@ export function Editor() {
   const [notes, setNotes] = useState<CareerNotes>(() => restored?.notes ?? {})
   const [target, setTarget] = useState<JobTarget>(() => restored?.target ?? {})
   const [choice, setChoice] = useState<ModelChoice>(loadChoice)
+  /**
+   * The last fit report, and what the resume looked like when it was written.
+   *
+   * Held here rather than in the pane so that it survives switching away from
+   * it, and so that "your resume has changed since this was written" is a
+   * string comparison rather than another request to a model.
+   */
+  const [fit, setFit] = useState<Extract<GeneratedFields, { kind: 'fit' }> | null>(null)
+  const [fitFor, setFitFor] = useState<string | null>(null)
   const [pane, setPane] = useState<Pane>('content')
   const [showPreview, setShowPreview] = useState(false)
   const [rearrange, setRearrange] = useState<RearrangeMode | null>(null)
@@ -104,6 +114,10 @@ export function Editor() {
   const compileBody = JSON.stringify({ profile: values, document })
   const draft = serializeDraft({ profile: values, document, notes, target })
   const compiled = useCompiledPdf(compileBody)
+
+  // What a fit report was written against. The resume and the advert, and
+  // nothing else: changing a font does not make a report out of date.
+  const fitKey = compileBody + (target.posting ?? '')
 
   // The form says which block it is on; the compile says where that block was
   // drawn. Neither knows about the other, and this is the whole join.
@@ -334,6 +348,8 @@ export function Editor() {
     setDocument(emptyDocument())
     setNotes({})
     setTarget({})
+    setFit(null)
+    setFitFor(null)
     setReport(null)
     setImportError(null)
     setRearrange(null)
@@ -532,6 +548,20 @@ export function Editor() {
                         saveChoice(next)
                       }}
                       onDocumentChange={setDocument}
+                    />
+                  )}
+                  {pane === 'fit' && (
+                    <FitReport
+                      form={form}
+                      brief={{ notes, target }}
+                      choice={choice}
+                      report={fit}
+                      stale={fit !== null && fitFor !== fitKey}
+                      onReport={(next) => {
+                        setFit(next)
+                        setFitFor(fitKey)
+                      }}
+                      onNotesChange={setNotes}
                     />
                   )}
                   {pane === 'layout' && (

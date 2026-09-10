@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { EVIDENCE_SECTIONS, REQUIREMENT_KINDS, VERDICTS } from './fields'
 import type { CareerNotes, JobTarget } from '@/lib/resume/brief'
 import type { Profile } from '@/lib/resume/profile'
 import { HIGHLIGHT_SECTIONS, type HighlightSection } from './fields'
@@ -26,6 +27,8 @@ export const generationTask = z.discriminatedUnion('kind', [
   }),
   /** The whole document, aimed at one advert, in one request. */
   z.object({ kind: z.literal('tailor') }),
+  /** How this resume answers one advert, requirement by requirement. */
+  z.object({ kind: z.literal('fit') }),
 ])
 
 export type GenerationTask = z.infer<typeof generationTask>
@@ -60,10 +63,35 @@ const tailorOutput = z.object({
   skills: z.array(z.number().int()),
 })
 
+/**
+ * What the model returns for a fit report.
+ *
+ * Neither the score nor the durations are in here, and that is the point: both
+ * are computed from what it cites. A model asked how long somebody has used
+ * Python answers with a number it made up; a union of date ranges cannot.
+ */
+const fitOutput = z.object({
+  requirements: z.array(
+    z.object({
+      requirement: z.string(),
+      kind: z.enum(REQUIREMENT_KINDS),
+      importance: z.enum(['required', 'preferred']),
+      verdict: z.enum(VERDICTS),
+      evidence: z.array(z.object({ section: z.enum(EVIDENCE_SECTIONS), index: z.number().int() })),
+      note: z.string(),
+    }),
+  ),
+  surplus: z.array(
+    z.object({ item: z.string(), verdict: z.enum(['keep', 'drop']), why: z.string() }),
+  ),
+  recommendations: z.array(z.object({ action: z.string(), because: z.string() })),
+})
+
 export const outputShape = {
   summary: summaryOutput,
   highlights: highlightsOutput,
   tailor: tailorOutput,
+  fit: fitOutput,
 } as const
 
 /**
@@ -73,7 +101,7 @@ export const outputShape = {
  * these sit well above the length actually asked for; a reply cut off halfway
  * is a wasted request, not a cheaper one.
  */
-const MAX_TOKENS = { summary: 1200, highlights: 1600, tailor: 6000 } as const
+const MAX_TOKENS = { summary: 1200, highlights: 1600, tailor: 6000, fit: 8000 } as const
 
 /** How much of a career is sent. A long profile is trimmed, never refused. */
 const MAX_WORK_ENTRIES = 8
@@ -94,6 +122,43 @@ const SYSTEM = [
   'You write fields for a resume builder. The person owns the facts; you only phrase them.',
   '',
   `Rules:\n- ${RULES}`,
+].join('\n')
+
+/**
+ * The rules for reading a resume against an advert, which are not the rules for
+ * writing one.
+ *
+ * Three of them come from the published work on using a model as a judge, and
+ * each replaced something worse:
+ *
+ * - **Four verdicts.** A binary met/unmet forces every ambiguous case into one
+ *   of them, and the ambiguous cases are the ones a person needs to read.
+ * - **Citation or nothing.** Requiring a source identifier for every claim is
+ *   the single technique that most reduces invented matches. Here the
+ *   identifiers already exist: the entries are numbered for tailoring.
+ * - **One criterion, one field.** Judging dimension by dimension, each with its
+ *   own justification, rather than asking for a paragraph of assessment.
+ *
+ * The fourth is this application's own, and it is the reason the durations are
+ * not in the schema: a model asked how long somebody has used Python will
+ * answer with a number it made up.
+ */
+const FIT_RULES = [
+  'Every requirement in the advert gets its own entry. Do not merge two into one, and do not skip the dull ones — a language, a location and a degree are requirements, and they are where applications actually fail.',
+  'A duty the advert says you will perform is not a requirement on its own. Read the competence it implies, judge that once, and do not enter the same competence twice — an advert that says you will lead distributed systems work and also asks for experience with distributed systems has stated one requirement, not two.',
+  'Take importance from the advert\'s own words. "Required", "must have", "you will need" is required; "preferred", "nice to have", "an asset", "bonus" is preferred. Anything under a heading that says preferred is preferred, whatever the line itself says.',
+  'Judge the competence, not the word. An advert asking for pandas, numpy and scikit-learn is asking for Python, and a resume showing those shows Python. A resume saying PostgreSQL answers "SQL databases"; one saying PyTorch answers "deep learning frameworks". Never mark something unmet because an exact string is absent.',
+  'Every verdict of met or partly cites the entries that prove it, by section and index, from the FACTS. A match you cannot point at is a match you must not claim — mark it unknown instead.',
+  'met: the resume shows it plainly, in a job or a project. partly: the resume shows something close — the skill in a project rather than a job, a neighbouring technology, less of it than asked for. unmet: the resume does not show it and the person plainly does not have it. unknown: the advert asks and the resume simply does not say, which is an omission rather than a gap.',
+  'Write no durations at all. Not in a requirement, not in a note, not anywhere: no "four years", no "about 18 months", no "since 2021". Cite the entries instead, and the length is worked out from their dates and shown beside what you wrote. A note that says "your history spans approximately four years" is both forbidden and, when the dates say six, wrong in front of the person reading it. Say what is short, not how short.',
+  'The advert is not a source of facts about the person. A job title, a technology or a length of experience that appears only in the advert must never appear in what you write about them.',
+  'Notes are one sentence, addressed to the person, concrete, and never praise. "Shown in a project rather than in a job" is a note. "Strong match!" is not.',
+].join('\n- ')
+
+const FIT_SYSTEM = [
+  'You read one resume and one job advert and report how the first answers the second. You rewrite nothing and you flatter nobody.',
+  '',
+  `Rules:\n- ${FIT_RULES}`,
 ].join('\n')
 
 /** What the brief holds, which is everything the resume itself does not. */
@@ -129,6 +194,35 @@ export function buildRequest(
         .join('\n'),
       maxTokens: MAX_TOKENS.summary,
       shape: summaryOutput,
+    }
+  }
+
+  if (task.kind === 'fit') {
+    if (!brief.target.posting) return null
+    return {
+      system: FIT_SYSTEM,
+      user: [
+        'Report how this resume answers this advert.',
+        '',
+        'Return three things.',
+        '',
+        'requirements: every requirement the advert states, in the order it states them, each with its importance, its verdict, the entries that prove it, and one sentence.',
+        '',
+        'surplus: what the resume spends space on that this advert has no use for. A skill or an entry the advert never asks for, and which is not evidence for anything it does ask for, is space that could carry something it does. Mark it "drop" only when it earns nothing here; mark it "keep" when it says something about the person worth the room even now, and say which in one sentence. Judge the same way as above: a library the advert never names can still be evidence for a competence it does.',
+        '',
+        'recommendations: at most three, and only for requirements you marked unmet or partly that the advert calls required. Each is a thing to do, not a thing to be — a documented project that does a named thing with a named tool, a certificate with a name. Never "tailor your resume" or "highlight your experience": that is what the rest of this report is for.',
+        aim(brief.target),
+        '',
+        `ADVERT:\n${brief.target.posting}`,
+        '',
+        rawMaterial(brief.notes),
+        '',
+        facts(profile),
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      maxTokens: MAX_TOKENS.fit,
+      shape: fitOutput,
     }
   }
 
@@ -246,6 +340,16 @@ function facts(profile: Profile): string {
     })
   }
 
+  const languages = (profile.languages ?? [])
+    .map((item) => [item.language, item.fluency].filter(Boolean).join(' — '))
+    .filter(Boolean)
+  if (languages.length > 0) lines.push(`Languages: ${languages.join(' | ')}`)
+
+  // Where they are, which is a requirement adverts state and applications fail
+  // on. Nothing else about the person's contact details is sent.
+  const place = [basics?.location?.city, basics?.location?.countryCode].filter(Boolean).join(', ')
+  if (place) lines.push(`Based in: ${place}`)
+
   const work = (profile.work ?? []).slice(0, MAX_WORK_ENTRIES)
   if (work.length > 0) {
     lines.push('Work:')
@@ -255,11 +359,11 @@ function facts(profile: Profile): string {
   const education = (profile.education ?? []).slice(0, MAX_OTHER_ENTRIES)
   if (education.length > 0) {
     lines.push('Education:')
-    for (const item of education) {
+    education.forEach((item, index) => {
       lines.push(
-        `- ${[item.studyType, item.area].filter(Boolean).join(' ')} at ${item.institution ?? 'unnamed institution'}, ${period(item.startDate, item.endDate)}`,
+        `- [education ${index}] ${[item.studyType, item.area].filter(Boolean).join(' ')} at ${item.institution ?? 'unnamed institution'}, ${period(item.startDate, item.endDate)}`,
       )
-    }
+    })
   }
 
   const projects = (profile.projects ?? []).slice(0, MAX_OTHER_ENTRIES)

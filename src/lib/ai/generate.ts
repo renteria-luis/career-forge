@@ -83,6 +83,11 @@ const PREFERRED: Record<GenerationTask['kind'], Provider> = {
   // selection. On the paid model it is about ten cents; on the free one, and
   // for the account allowed to use it, nothing.
   tailor: 'free',
+  // The one that is read rather than written, and the free model is still the
+  // right default for the same reason as the rest: everything here is read by
+  // the person who wrote the resume and can be checked by them. The paid model
+  // is for what a stranger reads and judges them by.
+  fit: 'free',
 }
 
 /**
@@ -289,6 +294,37 @@ function readFields(
     return { kind: 'summary', summary: field.data.summary }
   }
 
+  if (task.kind === 'fit') {
+    const shaped = outputShape.fit.safeParse(payload)
+    if (!shaped.success) return null
+    // A report with no requirements in it has read nothing. It is not an empty
+    // answer, it is a failed one.
+    if (shaped.data.requirements.length === 0) return null
+
+    const requirements = shaped.data.requirements.map((finding) => {
+      const evidence = realEvidence(profile, finding.evidence)
+      return {
+        ...finding,
+        evidence,
+        // A claim that lost every citation it had is a claim with nothing
+        // behind it, whatever it said about itself.
+        verdict:
+          evidence.length === 0 && (finding.verdict === 'met' || finding.verdict === 'partly')
+            ? ('unknown' as const)
+            : finding.verdict,
+        months: monthsCovered(profile, evidence, now),
+      }
+    })
+
+    return {
+      kind: 'fit',
+      score: scoreOf(requirements),
+      requirements,
+      surplus: shaped.data.surplus,
+      recommendations: shaped.data.recommendations,
+    }
+  }
+
   if (task.kind === 'tailor') {
     const shaped = outputShape.tailor.safeParse(payload)
     if (!shaped.success) return null
@@ -333,6 +369,100 @@ function readFields(
     index: task.index,
     highlights: cleaned,
   }
+}
+
+/**
+ * How much of the credit a verdict is worth, and how much a requirement counts.
+ *
+ * The score is arithmetic over these, not a number the model was asked for. A
+ * model's own score is unauditable and moves between runs on the same input;
+ * this one can be checked by hand and the screen can show the working.
+ *
+ * "Unknown" earns nothing on purpose. It means the advert asked and the resume
+ * does not say, and a reader who cannot tell does not give the benefit of the
+ * doubt. It is counted separately so the screen can say it is fixable by
+ * writing something rather than by learning something.
+ */
+const CREDIT: Record<string, number> = { met: 1, partly: 0.5, unmet: 0, unknown: 0 }
+const WEIGHT: Record<string, number> = { required: 1, preferred: 0.35 }
+
+function scoreOf(findings: { verdict: string; importance: string }[]): number {
+  let earned = 0
+  let possible = 0
+  for (const finding of findings) {
+    const weight = WEIGHT[finding.importance] ?? 1
+    possible += weight
+    earned += weight * (CREDIT[finding.verdict] ?? 0)
+  }
+  if (possible === 0) return 0
+  return Math.round((earned / possible) * 100)
+}
+
+/** A date range, or nothing when an entry carries no dates worth reading. */
+function span(
+  item: { startDate?: string; endDate?: string },
+  now: number,
+): [number, number] | null {
+  const start = Date.parse(item.startDate ?? '')
+  if (Number.isNaN(start)) return null
+  const end = item.endDate ? Date.parse(item.endDate) : now
+  if (Number.isNaN(end) || end < start) return null
+  return [start, end]
+}
+
+/**
+ * How many months the cited history actually covers.
+ *
+ * A union rather than a sum: two jobs that overlap are not twice the
+ * experience, and a person who used Python at both did not use it for twice as
+ * long. Entries without dates contribute nothing, and a citation of only those
+ * gives null — which the screen says as "not dated" rather than as zero.
+ */
+function monthsCovered(
+  profile: Profile,
+  evidence: { section: string; index: number }[],
+  now: number,
+): number | null {
+  const ranges: [number, number][] = []
+  for (const ref of evidence) {
+    const item =
+      ref.section === 'work'
+        ? profile.work?.[ref.index]
+        : ref.section === 'projects'
+          ? profile.projects?.[ref.index]
+          : undefined
+    const range = item ? span(item, now) : null
+    if (range) ranges.push(range)
+  }
+  if (ranges.length === 0) return null
+
+  ranges.sort((a, b) => a[0] - b[0])
+  let covered = 0
+  let [from, to] = ranges[0]!
+  for (const [start, end] of ranges.slice(1)) {
+    if (start > to) {
+      covered += to - from
+      ;[from, to] = [start, end]
+      continue
+    }
+    to = Math.max(to, end)
+  }
+  covered += to - from
+  return Math.round(covered / (30.44 * 24 * 60 * 60 * 1000))
+}
+
+/** Citations that point at an entry the profile does not have are dropped. */
+function realEvidence(
+  profile: Profile,
+  evidence: { section: 'work' | 'projects' | 'education' | 'skills'; index: number }[],
+) {
+  const available: Record<string, number> = {
+    work: profile.work?.length ?? 0,
+    projects: profile.projects?.length ?? 0,
+    education: profile.education?.length ?? 0,
+    skills: profile.skills?.length ?? 0,
+  }
+  return evidence.filter((ref) => ref.index >= 0 && ref.index < (available[ref.section] ?? 0))
 }
 
 /**

@@ -22,6 +22,57 @@ export const tailoredEntry = z.object({
   highlights: z.array(z.string()),
 })
 
+/** Where in a resume a claim is supposed to be proved. */
+export const EVIDENCE_SECTIONS = ['work', 'projects', 'education', 'skills'] as const
+export const evidenceRef = z.object({
+  section: z.enum(EVIDENCE_SECTIONS),
+  index: z.number().int().min(0),
+})
+
+export const REQUIREMENT_KINDS = [
+  'skill',
+  'experience',
+  'education',
+  'language',
+  'location',
+  'other',
+] as const
+
+/**
+ * Four verdicts, not two.
+ *
+ * The work on using a model as a judge is consistent about this: a binary
+ * met/unmet forces everything ambiguous into one of them, and the ambiguous
+ * cases are the ones a person needs to read. "Partly" is the applicant who has
+ * done the thing in a project and not in a job. "Unknown" is the resume not
+ * saying, which is a different problem with a different fix — one is a gap, the
+ * other is an omission.
+ */
+export const VERDICTS = ['met', 'partly', 'unmet', 'unknown'] as const
+
+export const requirementFinding = z.object({
+  /** The requirement as the advert states it, not as we would rather read it. */
+  requirement: z.string(),
+  kind: z.enum(REQUIREMENT_KINDS),
+  importance: z.enum(['required', 'preferred']),
+  verdict: z.enum(VERDICTS),
+  /**
+   * Which entries prove it. Mandatory for anything but a miss: a match with
+   * nowhere to point is the failure this whole report is built to avoid.
+   */
+  evidence: z.array(evidenceRef),
+  /** One sentence. What is missing, or what defends it. */
+  note: z.string(),
+  /**
+   * Months the cited history covers, computed from the dates rather than
+   * claimed. A model asked how long somebody has used Python will answer with a
+   * number it made up; a union of date ranges cannot.
+   */
+  months: z.number().int().min(0).nullable(),
+})
+
+export type RequirementFinding = z.infer<typeof requirementFinding>
+
 export const generatedFields = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('summary'), summary: z.string() }),
   z.object({
@@ -45,6 +96,29 @@ export const generatedFields = z.discriminatedUnion('kind', [
     projects: z.array(tailoredEntry),
     /** Which skill entries earn their place, by position. */
     skills: z.array(z.number().int().min(0)),
+  }),
+  /**
+   * How this resume answers one advert, requirement by requirement.
+   *
+   * The only generated thing here that is not a field: it changes nothing and
+   * is read. It still goes through the same seam, because it is still a model
+   * call against somebody's resume and the account, the allowance and the
+   * token log all have to hold.
+   */
+  z.object({
+    kind: z.literal('fit'),
+    /** Out of 100, counted from the verdicts below rather than asked for. */
+    score: z.number().int().min(0).max(100),
+    requirements: z.array(requirementFinding),
+    /** What the resume spends space on that this advert has no use for. */
+    surplus: z.array(
+      z.object({
+        item: z.string(),
+        verdict: z.enum(['keep', 'drop']),
+        why: z.string(),
+      }),
+    ),
+    recommendations: z.array(z.object({ action: z.string(), because: z.string() })),
   }),
 ])
 

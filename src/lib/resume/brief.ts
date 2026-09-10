@@ -58,6 +58,14 @@ export const jobTarget = z.object({
 export const careerNotes = z.object({
   notes: bounded(MAX_NOTES),
   voice: bounded(MAX_VOICE),
+  /**
+   * Things to learn, put here by the fit report and kept off the resume.
+   *
+   * A gap somebody intends to close is worth writing down and is not worth
+   * claiming. Keeping the two apart in the data is what stops "I will learn
+   * this" from quietly becoming a line an employer reads.
+   */
+  learning: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
 })
 
 export type JobTarget = z.infer<typeof jobTarget>

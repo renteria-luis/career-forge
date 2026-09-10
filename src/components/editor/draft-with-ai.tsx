@@ -32,9 +32,9 @@ function apply(form: UseFormReturn<Profile>, fields: GeneratedFields): void {
     form.setValue('basics.summary', fields.summary, options)
     return
   }
-  // A whole tailored document is not one field and does not belong to one
-  // button. It has its own screen; this control never asks for one.
-  if (fields.kind === 'tailored') return
+  // A tailored document and a fit report are not one field and do not belong to
+  // one button. Both have their own screen; this control never asks for either.
+  if (fields.kind !== 'highlights') return
   if (fields.section === 'work') {
     form.setValue(`work.${fields.index}.highlights`, fields.highlights, options)
     return
