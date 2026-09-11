@@ -1,7 +1,8 @@
 import type { z } from 'zod'
 import type { Provider } from './fields'
 import { ANTHROPIC_MODEL, anthropicClient } from './anthropic'
-import { GEMINI_MODEL, geminiClient } from './gemini'
+import { geminiClient } from './gemini'
+import { FREE_MODELS } from './free-quota'
 
 /**
  * The contract every provider answers, and the registry of which ones exist.
@@ -35,6 +36,8 @@ export interface TokenUsage {
 export interface ModelReply {
   /** The raw text of the reply. Still untrusted; `generate.ts` validates it. */
   text: string
+  /** Which model answered. Not a constant: the free provider moves between them. */
+  model: string
   stopReason: string | null
   usage: TokenUsage
 }
@@ -68,9 +71,13 @@ export interface ModelClient {
   send(request: ModelRequest, options?: SendOptions): Promise<ModelResult>
 }
 
-/** What each provider is actually running, for the log line. */
+/**
+ * What each provider runs, for the log line when a request never got far enough
+ * to say. A successful reply carries the model that actually answered, which on
+ * the free side is whichever one still had allowance.
+ */
 export const MODEL_NAMES: Record<Provider, string> = {
-  free: GEMINI_MODEL,
+  free: FREE_MODELS[0],
   best: ANTHROPIC_MODEL,
 }
 

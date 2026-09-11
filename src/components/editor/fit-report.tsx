@@ -8,6 +8,7 @@ import { useGeneration } from '@/lib/editor/use-generation'
 import type { CareerNotes } from '@/lib/resume/brief'
 import type { Profile } from '@/lib/resume/profile'
 import { Button, Field, Progress, Select } from './fields'
+import { FreeQuotaLine } from './free-quota-line'
 
 /**
  * How this resume answers one advert, read rather than written.
@@ -237,7 +238,7 @@ export function FitReport({
   onReport: (report: Fit | null) => void
   onNotesChange: (notes: CareerNotes) => void
 }) {
-  const { state, start, stop, dismiss } = useGeneration()
+  const { state, freeQuota, start, stop, dismiss } = useGeneration()
   const working = state.status === 'working'
   const ready = Boolean(brief.target.posting)
 
@@ -315,6 +316,7 @@ export function FitReport({
           </p>
         )}
         {state.status === 'failed' && <p className="text-flag text-small">{state.message}</p>}
+        <FreeQuotaLine quota={freeQuota} />
         {report && stale && !working && (
           <p className="text-muted text-small">
             Your resume or the advert has changed since this was written. Check it again to see what

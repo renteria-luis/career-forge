@@ -22,7 +22,7 @@ function replying(text: string) {
   const client: ModelClient = {
     async send(request) {
       requests.push(request)
-      return { ok: true, reply: { text, stopReason: 'end_turn', usage } }
+      return { ok: true, reply: { text, model: 'fake', stopReason: 'end_turn', usage } }
     },
   }
   return { client, requests }

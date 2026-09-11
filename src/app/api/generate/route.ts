@@ -168,9 +168,11 @@ export async function POST(request: Request) {
 }
 
 function payloadOf(result: GenerationResult) {
-  if (result.ok) return { fields: result.fields }
+  const quota = result.freeQuota ? { quota: result.freeQuota } : {}
+  if (result.ok) return { fields: result.fields, ...quota }
   return {
     failure: result.failure,
     ...(result.retryAfterSeconds ? { retryAfterSeconds: result.retryAfterSeconds } : {}),
+    ...quota,
   }
 }

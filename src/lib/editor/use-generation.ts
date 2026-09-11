@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readFrame } from '@/lib/ai/events'
-import { FAILURE_MESSAGES, type GeneratedFields, type ModelChoice } from '@/lib/ai/fields'
+import {
+  FAILURE_MESSAGES,
+  type FreeQuota,
+  type GeneratedFields,
+  type ModelChoice,
+} from '@/lib/ai/fields'
 import type { Brief, GenerationTask } from '@/lib/ai/tasks'
 import type { Profile } from '@/lib/resume/profile'
 
@@ -28,6 +33,13 @@ export type GenerationState =
 
 export interface Generation {
   state: GenerationState
+  /**
+   * What the free provider has left, as of the last request that used it.
+   *
+   * Null until one has run, and stays at its last reading afterwards — it is a
+   * count from the server, not a subscription to one.
+   */
+  freeQuota: FreeQuota | null
   start: (body: {
     profile: Profile
     /** The advert and the raw material. Only tailoring needs one. */
@@ -76,6 +88,7 @@ async function refusal(response: Response): Promise<string> {
 
 export function useGeneration(): Generation {
   const [state, setState] = useState<GenerationState>({ status: 'idle' })
+  const [freeQuota, setFreeQuota] = useState<FreeQuota | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const stop = useCallback(() => {
@@ -130,8 +143,10 @@ export function useGeneration(): Generation {
               if (!event) continue
               if (event.name === 'result') {
                 settled = true
+                if (event.quota) setFreeQuota(event.quota)
                 setState({ status: 'proposed', fields: event.fields })
               } else if (event.name === 'error') {
+                if (event.quota) setFreeQuota(event.quota)
                 settled = true
                 setState({
                   status: 'failed',
@@ -155,5 +170,5 @@ export function useGeneration(): Generation {
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  return { state, start, stop, dismiss }
+  return { state, freeQuota, start, stop, dismiss }
 }

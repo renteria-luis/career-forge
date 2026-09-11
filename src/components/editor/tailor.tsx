@@ -12,6 +12,7 @@ import type { ResumeDocument } from '@/lib/resume/document'
 import type { Profile } from '@/lib/resume/profile'
 import { ConfirmDialog } from './confirm-dialog'
 import { Button, Progress } from './fields'
+import { FreeQuotaLine } from './free-quota-line'
 
 /**
  * Aims the whole resume at one advert.
@@ -90,7 +91,7 @@ export function Tailor({
   onDocumentChange: (document: ResumeDocument) => void
 }) {
   const { data, isPending } = authClient.useSession()
-  const { state, start, stop, dismiss } = useGeneration()
+  const { state, freeQuota, start, stop, dismiss } = useGeneration()
   const [asking, setAsking] = useState(false)
 
   const working = state.status === 'working'
@@ -159,6 +160,7 @@ export function Tailor({
       )}
 
       {state.status === 'failed' && <p className="text-flag text-small">{state.message}</p>}
+      <FreeQuotaLine quota={freeQuota} />
 
       {proposal && (
         <div className="border-hairline bg-surface-sunk rounded-panel flex flex-col gap-4 border p-4">

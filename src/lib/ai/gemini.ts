@@ -1,5 +1,6 @@
 import { ApiError, GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
+import { nextModel, recordExhausted, recordRequest } from './free-quota'
 import { logFailure, type ModelClient, type ModelFailure, type ModelResult } from './model'
 
 /**
@@ -17,16 +18,13 @@ import { logFailure, type ModelClient, type ModelFailure, type ModelResult } fro
  */
 
 /**
- * Flash, because Pro left the free tier in April 2026.
+ * Which model answers is decided per request, in `free-quota.ts`.
  *
- * Written here rather than read from the environment, like the Anthropic one,
- * so that changing it is reviewable. Chosen by listing the models the key can
- * actually reach and then measuring them, rather than by taking the newest:
- * five requests to `gemini-3.8-flash` came back 200, 503, 429, 429, 503, while
- * the same five to this one came back 503, 200, 200, 200, 200. The newest model
- * on a free tier is the one everybody else is also hammering.
+ * The allowance is twenty a day per model, so a list of models is a list of
+ * allowances and a model that has refused today is one to stop asking. The
+ * order there was measured rather than assumed — the newest model on a free
+ * tier is the one everybody else is also hammering.
  */
-export const GEMINI_MODEL = 'gemini-3.5-flash'
 
 /**
  * Thinking off, which on this provider is not the same trade as elsewhere.
@@ -92,27 +90,59 @@ export function geminiClient(apiKey: string): ModelClient {
 
   return {
     async send(request, options = {}) {
-      for (let taken = 0; ; taken += 1) {
-        try {
-          return await attempt(request, options)
-        } catch (error) {
-          const wait = RETRY_DELAYS_MS[taken]
-          if (wait === undefined || !worthRetrying(error) || options.signal?.aborted) {
-            return describeFailure(error)
-          }
-          logFailure('free', `status=${(error as ApiError).status} retry=${taken + 1}`)
-          await new Promise((resolve) => setTimeout(resolve, wait))
+      /**
+       * One model at a time, and on to the next when a day runs out.
+       *
+       * A 429 here is the provider's own answer about its own allowance, and it
+       * is the only authority on it — the tally kept alongside is this
+       * instance's guess. So a refusal retires that model for the day and the
+       * request moves on, which is both how the published per-model quotas are
+       * meant to be used and what resilience would look like anyway.
+       */
+      for (;;) {
+        const model = nextModel()
+        if (!model) return { ok: false, failure: 'rate-limited' }
+
+        const result = await attemptWith(model, request, options)
+        if (result === 'spent') {
+          logFailure('free', `model=${model} allowance spent for the day`)
+          recordExhausted(model)
+          continue
         }
+        return result
       }
     },
   }
 
+  /** A result, or the word that says to try the next model instead. */
+  async function attemptWith(
+    model: string,
+    request: Parameters<ModelClient['send']>[0],
+    options: NonNullable<Parameters<ModelClient['send']>[1]>,
+  ): Promise<ModelResult | 'spent'> {
+    for (let taken = 0; ; taken += 1) {
+      try {
+        return await attempt(model, request, options)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 429) return 'spent'
+        const wait = RETRY_DELAYS_MS[taken]
+        if (wait === undefined || !worthRetrying(error) || options.signal?.aborted) {
+          return describeFailure(error)
+        }
+        logFailure('free', `status=${(error as ApiError).status} retry=${taken + 1}`)
+        await new Promise((resolve) => setTimeout(resolve, wait))
+      }
+    }
+  }
+
   async function attempt(
+    model: string,
     request: Parameters<ModelClient['send']>[0],
     options: NonNullable<Parameters<ModelClient['send']>[1]>,
   ): Promise<ModelResult> {
+    recordRequest(model)
     const stream = await ai.models.generateContentStream({
-      model: GEMINI_MODEL,
+      model,
       contents: [{ role: 'user', parts: [{ text: request.user }] }],
       config: {
         systemInstruction: request.system,
@@ -157,7 +187,7 @@ export function geminiClient(apiKey: string): ModelClient {
       return { ok: false, failure: 'refused' }
     }
 
-    return { ok: true, reply: { text, stopReason: finish, usage } }
+    return { ok: true, reply: { text, model, stopReason: finish, usage } }
   }
 }
 

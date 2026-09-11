@@ -314,6 +314,20 @@ now. And the refusal says what the allowance is instead of naming a number of
 seconds, because somebody told to wait thirty-five seconds for something that
 returns tomorrow presses the button again and learns nothing.
 
+Twenty a day, per model, is what the rotation in `src/lib/ai/free-quota.ts` is
+for: a list of models is a list of allowances, and a model the provider has
+refused today is one to stop asking. Four of them reach about eighty a day on
+one key and one project, using published per-model quotas as published. More
+keys in the same project buy nothing — the quota is per project, which the
+identifier says — and more projects would be quota circumvention rather than
+resilience, which is where this stops.
+
+Beside every button that spends one, an approximate count. It is this
+instance's own tally: zero after a deploy, blind to requests made elsewhere with
+the same key, and reset on Google's day rather than the local one, which turns
+over at midnight Pacific. The provider's refusal is the authority and retires a
+model immediately, whatever the tally said.
+
 Twenty a day is roughly two applications. That is the real cost of this
 provider, and the honest options are three: live inside it, pay for Claude at
 about a cent a draft, or enable billing on the Google project — which is the

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { generatedFields, generationFailure } from './fields'
+import { freeQuota, generatedFields, generationFailure } from './fields'
 
 /**
  * The wire format between `/api/generate` and the editor.
@@ -19,11 +19,12 @@ export const generationEvent = z.discriminatedUnion('name', [
   z.object({ name: z.literal('ping') }),
   /** Characters written so far. Proof of life, not something to display. */
   z.object({ name: z.literal('progress'), characters: z.number() }),
-  z.object({ name: z.literal('result'), fields: generatedFields }),
+  z.object({ name: z.literal('result'), fields: generatedFields, quota: freeQuota.optional() }),
   z.object({
     name: z.literal('error'),
     failure: generationFailure,
     retryAfterSeconds: z.number().optional(),
+    quota: freeQuota.optional(),
   }),
 ])
 

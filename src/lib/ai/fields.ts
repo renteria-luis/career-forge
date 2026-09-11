@@ -141,6 +141,18 @@ export type ModelChoice = z.infer<typeof modelChoice>
 /** The two providers, named by what they cost rather than by whose they are. */
 export type Provider = 'free' | 'best'
 
+/**
+ * What is left of the free provider's day, as this instance counts it.
+ *
+ * Approximate on purpose and labelled that way where it is shown: it is one
+ * instance's tally, it starts at zero after a deploy, and it knows nothing
+ * about requests made elsewhere with the same key. Still worth carrying — the
+ * difference between "the button does nothing" and "four of eighty left" is the
+ * difference between a bug and a budget.
+ */
+export const freeQuota = z.object({ used: z.number().int().min(0), limit: z.number().int().min(0) })
+export type FreeQuota = z.infer<typeof freeQuota>
+
 export const GENERATION_FAILURES = [
   /** Signed in, address not confirmed. May exist; may not spend. */
   'unverified',

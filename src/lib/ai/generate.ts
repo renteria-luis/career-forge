@@ -1,6 +1,7 @@
 import { createRateLimiter, type RateLimiter } from '@/lib/http/rate-limit'
 import { basics, project, work, type Profile } from '@/lib/resume/profile'
-import type { GeneratedFields, GenerationFailure, ModelChoice, Provider } from './fields'
+import type { FreeQuota, GeneratedFields, GenerationFailure, ModelChoice, Provider } from './fields'
+import { remaining } from './free-quota'
 import { MODEL_NAMES, modelClient, type ModelClient, type TokenUsage } from './model'
 import { buildRequest, outputShape, type Brief, type GenerationTask } from './tasks'
 
@@ -34,8 +35,14 @@ export interface Account {
 }
 
 export type GenerationResult =
-  | { ok: true; fields: GeneratedFields; usage: TokenUsage }
-  | { ok: false; failure: GenerationFailure; retryAfterSeconds?: number; usage?: TokenUsage }
+  | { ok: true; fields: GeneratedFields; usage: TokenUsage; freeQuota?: FreeQuota }
+  | {
+      ok: false
+      failure: GenerationFailure
+      retryAfterSeconds?: number
+      usage?: TokenUsage
+      freeQuota?: FreeQuota
+    }
 
 /**
  * What one account may spend.
@@ -198,9 +205,23 @@ export async function generateFields(
   const choice = input.choice ?? 'auto'
   let ran: Provider = choice === 'auto' ? PREFERRED[task.kind] : choice
 
+  let model = MODEL_NAMES[ran]
+
+  /**
+   * Whether the free provider's own client was the one that ran.
+   *
+   * Not "was it chosen": a request refused before anything was sent has spent
+   * none of the day, and reporting a count beside it would say the allowance
+   * moved when it did not. An injected transport is not the free provider
+   * either, which is what keeps the count out of the tests that assert a whole
+   * result.
+   */
+  let spentOne = false
+
   const report = (result: GenerationResult): GenerationResult => {
-    log(account.id, task, ran, result, Date.now() - started)
-    return result
+    log(account.id, task, ran, model, result, Date.now() - started)
+    if (!spentOne) return result
+    return { ...result, freeQuota: remaining(options.now ?? Date.now()) }
   }
 
   // An unconfirmed address may hold an account and may not spend anything. The
@@ -214,6 +235,7 @@ export async function generateFields(
     if ('refusal' in resolved) return report({ ok: false, failure: resolved.refusal })
     client = resolved.client
     ran = resolved.provider
+    model = MODEL_NAMES[ran]
   }
 
   const brief: Brief = input.brief ?? { notes: {}, target: {} }
@@ -232,6 +254,7 @@ export async function generateFields(
 
   if (state().inFlight >= MAX_CONCURRENT) return report({ ok: false, failure: 'busy' })
 
+  spentOne = ran === 'free' && !options.client
   state().inFlight += 1
   let result: Awaited<ReturnType<ModelClient['send']>>
   try {
@@ -248,6 +271,9 @@ export async function generateFields(
     })
   }
 
+  // What actually answered, which on the free side is whichever model still had
+  // allowance rather than the one at the top of the list.
+  model = result.reply.model
   const fields = readFields(result.reply.text, task, input.profile, options.now ?? Date.now())
   if (!fields) {
     return report({ ok: false, failure: 'invalid-output', usage: result.reply.usage })
@@ -584,6 +610,7 @@ function log(
   accountId: string,
   task: GenerationTask,
   provider: Provider,
+  model: string,
   result: GenerationResult,
   ms: number,
 ): void {
@@ -595,7 +622,7 @@ function log(
       `account=${accountId}`,
       `task=${task.kind}`,
       `provider=${provider}`,
-      `model=${MODEL_NAMES[provider]}`,
+      `model=${model}`,
       `in=${usage?.input ?? 0}`,
       `out=${usage?.output ?? 0}`,
       `thinking=${usage?.thinking ?? 0}`,

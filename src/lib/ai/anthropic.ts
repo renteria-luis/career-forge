@@ -73,6 +73,7 @@ export function anthropicClient(apiKey: string): ModelClient {
           ok: true,
           reply: {
             text,
+            model: ANTHROPIC_MODEL,
             stopReason: final.stop_reason,
             usage: {
               input: final.usage.input_tokens,
